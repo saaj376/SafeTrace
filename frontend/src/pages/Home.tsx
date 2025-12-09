@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, Navigation, Shield, AlertTriangle, Radio, X } from 'lucide-react'
+import { Navigation, Shield, AlertTriangle, Radio, X } from 'lucide-react'
 import Map from '../components/Map'
 import {
   calculateRoute,
@@ -12,26 +12,35 @@ import {
   RouteResponse,
   AlertResponse,
 } from '../services/api'
+import { geocodeLocation, searchLocations, GeocodingResult } from '../services/geocoding'
 import clsx from 'clsx'
 
 type RouteMode = 'safe' | 'balanced' | 'stealth' | 'escort'
 
 export default function Home() {
+  const [startLocation, setStartLocation] = useState<string>('')
+  const [endLocation, setEndLocation] = useState<string>('')
   const [start, setStart] = useState<Coordinate | null>(null)
   const [end, setEnd] = useState<Coordinate | null>(null)
+  const [geocodingLoading, setGeocodingLoading] = useState(false)
+  const [startSuggestions, setStartSuggestions] = useState<GeocodingResult[]>([])
+  const [endSuggestions, setEndSuggestions] = useState<GeocodingResult[]>([])
   const [route, setRoute] = useState<Coordinate[]>([])
   const [mode, setMode] = useState<RouteMode>('safe')
   const [loading, setLoading] = useState(false)
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null)
   const [sosActive, setSosActive] = useState(false)
   const [sosToken, setSosToken] = useState<string | null>(null)
-  const [alert, setAlert] = useState<AlertResponse | null>(null)
+  const [alertResponse, setAlertResponse] = useState<AlertResponse | null>(null)
   const [routeInfo, setRouteInfo] = useState<{ distance: number; mode: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [backendConnected, setBackendConnected] = useState<boolean | null>(null)
   
-  const monitoringIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const sosIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const monitoringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sosIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startSuggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const endSuggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const navigationStartedRef = useRef<boolean>(false)
 
   // Check backend connection on mount
   useEffect(() => {
@@ -101,6 +110,10 @@ export default function Home() {
         distance: response.distance_approx_km,
         mode: response.mode_used,
       })
+      startNavigation(response.route_coords, {
+        distanceKm: response.distance_approx_km,
+        mode,
+      })
       
       // Start monitoring if route is active
       startMonitoring(response.route_coords)
@@ -112,9 +125,85 @@ export default function Home() {
       setError(errorMessage)
       setRoute([]) // Clear any previous route
       setRouteInfo(null)
+      navigationStartedRef.current = false
     } finally {
       setLoading(false)
     }
+  }
+
+  const speak = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const utterance = new SpeechSynthesisUtterance(text)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const calculateBearing = (a: Coordinate, b: Coordinate) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const lat1 = toRad(a.lat)
+    const lat2 = toRad(b.lat)
+    const dLon = toRad(b.lon - a.lon)
+    const y = Math.sin(dLon) * Math.cos(lat2)
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+    const bearing = (Math.atan2(y, x) * 180) / Math.PI
+    return (bearing + 360) % 360
+  }
+
+  const bearingToDirection = (bearing: number) => {
+    const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']
+    const index = Math.round(bearing / 45) % 8
+    return directions[index]
+  }
+
+  const segmentDistanceKm = (a: Coordinate, b: Coordinate) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const R = 6371 // km
+    const dLat = toRad(b.lat - a.lat)
+    const dLon = toRad(b.lon - a.lon)
+    const lat1 = toRad(a.lat)
+    const lat2 = toRad(b.lat)
+    const h =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    return 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+  }
+
+  const startNavigation = (
+    routeCoords: Coordinate[],
+    summary?: { distanceKm?: number; mode?: RouteMode }
+  ) => {
+    if (!routeCoords.length) return
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+
+    // Avoid restarting the prompt if the same route is re-set
+    if (navigationStartedRef.current) {
+      window.speechSynthesis.cancel()
+    }
+
+    navigationStartedRef.current = true
+    const messages: string[] = []
+
+    const distancePart = summary?.distanceKm
+      ? `about ${summary.distanceKm.toFixed(1)} kilometers`
+      : 'the planned route'
+
+    messages.push(
+      `Starting ${summary?.mode || 'safe'} navigation. Route is ${distancePart}.`
+    )
+
+    if (routeCoords.length >= 2) {
+      const first = routeCoords[0]
+      const second = routeCoords[1]
+      const bearing = calculateBearing(first, second)
+      const direction = bearingToDirection(bearing)
+      const legDistance = segmentDistanceKm(first, second)
+      messages.push(
+        `Head ${direction} on the first segment for roughly ${legDistance.toFixed(2)} kilometers.`
+      )
+    }
+
+    messages.push('Navigation voice prompts are active. Watch for safety alerts during your trip.')
+
+    messages.forEach((text) => speak(text))
   }
 
   const startMonitoring = (routeCoords: Coordinate[]) => {
@@ -138,7 +227,7 @@ export default function Home() {
         })
 
         if (alertResponse.alert_type) {
-          setAlert(alertResponse)
+          setAlertResponse(alertResponse)
         }
       } catch (error) {
         console.error('Error checking safety status:', error)
@@ -273,18 +362,18 @@ export default function Home() {
       )}
 
       {/* Alert Banner */}
-      {alert && alert.alert_type && (
+      {alertResponse && alertResponse.alert_type && (
         <div className="mb-6 card bg-danger-50 border-danger-200">
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-3">
               <AlertTriangle className="h-6 w-6 text-danger-600 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-danger-900">{alert.alert_type}</h3>
-                <p className="text-danger-700 mt-1">{alert.message}</p>
-                {alert.action_required && (
+                <h3 className="font-semibold text-danger-900">{alertResponse.alert_type}</h3>
+                <p className="text-danger-700 mt-1">{alertResponse.message}</p>
+                {alertResponse.action_required && (
                   <button
                     onClick={() => {
-                      setAlert(null)
+                      setAlertResponse(null)
                       // Trigger reroute logic here
                     }}
                     className="mt-2 btn btn-danger text-sm"
@@ -295,7 +384,7 @@ export default function Home() {
               </div>
             </div>
             <button
-              onClick={() => setAlert(null)}
+              onClick={() => setAlertResponse(null)}
               className="text-danger-600 hover:text-danger-800"
             >
               <X className="h-5 w-5" />
@@ -362,40 +451,81 @@ export default function Home() {
                   Start Point
                 </label>
                 <div className="flex space-x-2">
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Latitude"
-                    value={start?.lat || ''}
-                    onChange={(e) =>
-                      setStart((prev) => ({
-                        lat: parseFloat(e.target.value) || 0,
-                        lon: prev?.lon || 0,
-                      }))
-                    }
-                    className="input"
-                  />
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Longitude"
-                    value={start?.lon || ''}
-                    onChange={(e) =>
-                      setStart((prev) => ({
-                        lat: prev?.lat || 0,
-                        lon: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="input"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Enter start location (e.g., 'Marina Bay, Singapore')"
+                      value={startLocation}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setStartLocation(value)
+                        if (startSuggestTimeout.current) clearTimeout(startSuggestTimeout.current)
+                        if (!value.trim()) {
+                          setStartSuggestions([])
+                          return
+                        }
+                        startSuggestTimeout.current = setTimeout(async () => {
+                          const results = await searchLocations(value)
+                          setStartSuggestions(results)
+                        }, 250)
+                      }}
+                      className="input w-full"
+                      autoComplete="off"
+                    />
+                    {startSuggestions.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {startSuggestions.map((s) => (
+                          <button
+                            key={`${s.lat}-${s.lon}`}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                            onClick={() => {
+                              setStart({ lat: s.lat, lon: s.lon })
+                              setStartLocation(s.name)
+                              setStartSuggestions([])
+                            }}
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setGeocodingLoading(true)
+                      const result = await geocodeLocation(startLocation)
+                      if (result) {
+                        setStart({ lat: result.lat, lon: result.lon })
+                        setStartLocation(result.name)
+                        setStartSuggestions([])
+                      } else {
+                        setError('Location not found. Please try another search.')
+                      }
+                      setGeocodingLoading(false)
+                    }}
+                    disabled={geocodingLoading || !startLocation.trim()}
+                    className="btn btn-secondary disabled:opacity-50"
+                  >
+                    Search
+                  </button>
                 </div>
                 {currentLocation && (
                   <button
-                    onClick={() => setStart(currentLocation)}
+                    onClick={() => {
+                      setStart(currentLocation)
+                      setStartLocation('Current Location')
+                      setStartSuggestions([])
+                    }}
                     className="mt-2 text-sm text-primary-600 hover:text-primary-700"
                   >
                     Use Current Location
                   </button>
+                )}
+                {start && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    ✓ Set to ({start.lat.toFixed(4)}, {start.lon.toFixed(4)})
+                  </p>
                 )}
               </div>
 
@@ -404,33 +534,70 @@ export default function Home() {
                   End Point
                 </label>
                 <div className="flex space-x-2">
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Latitude"
-                    value={end?.lat || ''}
-                    onChange={(e) =>
-                      setEnd((prev) => ({
-                        lat: parseFloat(e.target.value) || 0,
-                        lon: prev?.lon || 0,
-                      }))
-                    }
-                    className="input"
-                  />
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="Longitude"
-                    value={end?.lon || ''}
-                    onChange={(e) =>
-                      setEnd((prev) => ({
-                        lat: prev?.lat || 0,
-                        lon: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="input"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Enter end location (e.g., 'Gardens by the Bay, Singapore')"
+                      value={endLocation}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setEndLocation(value)
+                        if (endSuggestTimeout.current) clearTimeout(endSuggestTimeout.current)
+                        if (!value.trim()) {
+                          setEndSuggestions([])
+                          return
+                        }
+                        endSuggestTimeout.current = setTimeout(async () => {
+                          const results = await searchLocations(value)
+                          setEndSuggestions(results)
+                        }, 250)
+                      }}
+                      className="input w-full"
+                      autoComplete="off"
+                    />
+                    {endSuggestions.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {endSuggestions.map((s) => (
+                          <button
+                            key={`${s.lat}-${s.lon}`}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
+                            onClick={() => {
+                              setEnd({ lat: s.lat, lon: s.lon })
+                              setEndLocation(s.name)
+                              setEndSuggestions([])
+                            }}
+                          >
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setGeocodingLoading(true)
+                      const result = await geocodeLocation(endLocation)
+                      if (result) {
+                        setEnd({ lat: result.lat, lon: result.lon })
+                        setEndLocation(result.name)
+                        setEndSuggestions([])
+                      } else {
+                        setError('Location not found. Please try another search.')
+                      }
+                      setGeocodingLoading(false)
+                    }}
+                    disabled={geocodingLoading || !endLocation.trim()}
+                    className="btn btn-secondary disabled:opacity-50"
+                  >
+                    Search
+                  </button>
                 </div>
+                {end && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    ✓ Set to ({end.lat.toFixed(4)}, {end.lon.toFixed(4)})
+                  </p>
+                )}
               </div>
 
               <button

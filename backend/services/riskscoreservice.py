@@ -46,19 +46,22 @@ def load_risk_and_graph_data():
         # We assume the graph was saved successfully by generate_safe_graph.py
         # Handle both old and new networkx API
         try:
-            G = nx.read_gpickle(SAFE_GRAPH_PATH)
+            graph_obj = nx.read_gpickle(SAFE_GRAPH_PATH)
         except AttributeError:
             # For newer networkx versions, use the pickle module directly
             import pickle
             with open(SAFE_GRAPH_PATH, 'rb') as f:
-                G = pickle.load(f)
+                graph_obj = pickle.load(f)
         
-        print(f"Loaded Safe Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges.")
+        print(f"Loaded Safe Graph: {graph_obj.number_of_nodes()} nodes, {graph_obj.number_of_edges()} edges.")
         
         # 3. Create the Node ID -> Coordinates Map for quick reference
-        for node, data in G.nodes(data=True):
+        for node, data in graph_obj.nodes(data=True):
             # OSMnx uses 'y' for latitude and 'x' for longitude
             NODE_TO_COORDS[node] = (data['y'], data['x'])
+        
+        # 4. Assign to global variable
+        G = graph_obj
             
     except Exception as e:
         print(f"ERROR: Graph file could not be loaded: {e}")
