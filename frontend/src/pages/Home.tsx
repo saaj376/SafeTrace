@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Navigation, Shield, AlertTriangle, Radio, X } from 'lucide-react'
 import Map from '../components/Map'
 import {
@@ -18,6 +19,7 @@ import clsx from 'clsx'
 type RouteMode = 'safe' | 'balanced' | 'stealth' | 'escort'
 
 export default function Home() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [startLocation, setStartLocation] = useState<string>('')
   const [endLocation, setEndLocation] = useState<string>('')
   const [start, setStart] = useState<Coordinate | null>(null)
@@ -41,6 +43,26 @@ export default function Home() {
   const startSuggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const endSuggestTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigationStartedRef = useRef<boolean>(false)
+
+  // Check for POI location in URL params
+  useEffect(() => {
+    const lat = searchParams.get('lat')
+    const lon = searchParams.get('lon')
+    const name = searchParams.get('name')
+    
+    if (lat && lon) {
+      const coordinate: Coordinate = {
+        lat: parseFloat(lat),
+        lon: parseFloat(lon)
+      }
+      setEnd(coordinate)
+      if (name) {
+        setEndLocation(name)
+      }
+      // Clear the params after setting
+      setSearchParams({})
+    }
+  }, [searchParams, setSearchParams])
 
   // Check backend connection on mount
   useEffect(() => {

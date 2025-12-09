@@ -69,9 +69,11 @@ export default function Map({
       ? [currentLocation.lat, currentLocation.lon]
       : start 
       ? [start.lat, start.lon]
+      : end
+      ? [end.lat, end.lon]
       : defaultCenter
 
-  const mapZoom = start || currentLocation ? 14 : defaultZoom
+  const mapZoom = start || currentLocation || end ? 14 : defaultZoom
 
   // Polyline color based on route mode
   const getRouteColor = () => {

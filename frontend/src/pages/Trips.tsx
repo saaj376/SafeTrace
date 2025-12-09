@@ -1,5 +1,6 @@
-import { Route, Clock, MapPin, Sparkles, Package, Calendar, Users, MapPinIcon, Search, Utensils, Camera, Train } from 'lucide-react'
+import { Route, Clock, MapPin, Sparkles, Package, Calendar, Users, MapPinIcon, Search, Utensils, Camera, Train, Navigation } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 
 interface ItineraryItem {
@@ -24,6 +25,7 @@ interface POI {
 }
 
 export default function Trips() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'builder' | 'packing'>('builder')
   const [showItineraryBuilder, setShowItineraryBuilder] = useState(false)
   const [showPackingAssistant, setShowPackingAssistant] = useState(false)
@@ -492,11 +494,46 @@ export default function Trips() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
                       {poiResults.map((poi, idx) => (
                         <div key={idx} className="p-4 bg-warning-50 border border-warning-200 rounded-lg">
-                          <h4 className="font-semibold text-gray-900 mb-1">{poi.name}</h4>
-                          <p className="text-sm text-gray-600 mb-2 flex items-center">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {poi.address}
-                          </p>
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 mb-1">{poi.name}</h4>
+                              <p className="text-sm text-gray-600 mb-2 flex items-start">
+                                <MapPin className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                                <span className="line-clamp-2">{poi.address}</span>
+                              </p>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                // Use geocoding to get coordinates for the address
+                                try {
+                                  const response = await fetch(
+                                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(poi.address)}&limit=1`,
+                                    {
+                                      headers: {
+                                        'Accept': 'application/json',
+                                      }
+                                    }
+                                  )
+                                  const results = await response.json()
+                                  if (results && results.length > 0) {
+                                    const lat = parseFloat(results[0].lat)
+                                    const lon = parseFloat(results[0].lon)
+                                    // Navigate to home page with location as query params
+                                    navigate(`/?lat=${lat}&lon=${lon}&name=${encodeURIComponent(poi.name)}`)
+                                  } else {
+                                    alert('Could not find location on map')
+                                  }
+                                } catch (error) {
+                                  console.error('Error geocoding address:', error)
+                                  alert('Failed to locate on map')
+                                }
+                              }}
+                              className="ml-2 p-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors flex-shrink-0"
+                              title="View on Map"
+                            >
+                              <Navigation className="h-4 w-4" />
+                            </button>
+                          </div>
                           {poi.rating && (
                             <div className="flex items-center space-x-2 text-sm">
                               <span className="text-yellow-600">★ {poi.rating}</span>
