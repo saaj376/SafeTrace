@@ -881,7 +881,7 @@ export default function Home() {
 
                   <button
                     onClick={handleCalculateRoute}
-                    disabled={loading || !start || !end || backendConnected === false}
+                    disabled={loading || !start || !end}
                     className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (

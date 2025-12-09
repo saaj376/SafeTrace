@@ -600,49 +600,21 @@ async def root():
 
 @app.get("/api/heatmap")
 async def get_heatmap():
-    """Return the safety heatmap GeoJSON"""
-    def score_to_color(score):
-        if score is None:
-            return "#666666"
-        if score >= 0.8:
-            return "#00ff00"
-        if score >= 0.5:
-            return "#ffaa00"
-        return "#ff0066"
-    
-    features = []
-    for seg in SEGMENTS:
-        seg_id = seg["segment_id"]
-        coords = seg["coordinates"]
-        
-        score_entry = SCORES.get(str(seg_id))
-        score_value = score_entry["score"] if score_entry else None
-        
-        color = score_to_color(score_value)
-        
-        feature = {
-            "type": "Feature",
-            "properties": {
-                "segment_id": seg_id,
-                "score": score_value,
-                "color": color
-            },
-            "geometry": {
-                "type": "LineString",
-                "coordinates": coords
-            }
+    """Return the safety heatmap GeoJSON from file"""
+    try:
+        with open("safety_heatmap.geojson") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # Fallback: return empty heatmap if file doesn't exist
+        return {
+            "type": "FeatureCollection",
+            "features": []
         }
-        features.append(feature)
-    
-    return {
-        "type": "FeatureCollection",
-        "features": features
-    }
 
 @app.get("/safety_heatmap.geojson")
 async def geojson():
-    """Legacy endpoint - redirects to /api/heatmap"""
-    return await get_heatmap()
+    """Legacy endpoint - serves the heatmap file"""
+    return FileResponse("safety_heatmap.geojson")
 
 # Place Search Endpoints
 @app.get("/api/places/search")
