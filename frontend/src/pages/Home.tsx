@@ -328,6 +328,9 @@ export default function Home() {
             <p className="text-gray-600">
               Intelligent safety routing with real-time hazard monitoring
             </p>
+            <p className="text-sm text-primary-600 mt-1">
+              📍 Currently serving Chennai, Tamil Nadu, India
+            </p>
           </div>
           {backendConnected !== null && (
             <div className="flex items-center space-x-2">
@@ -454,7 +457,7 @@ export default function Home() {
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder="Enter start location (e.g., 'Marina Bay, Singapore')"
+                      placeholder="Enter start location (e.g., 'Marina Beach', 'T Nagar', 'Anna Nagar')"
                       value={startLocation}
                       onChange={(e) => {
                         const value = e.target.value
@@ -537,7 +540,7 @@ export default function Home() {
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder="Enter end location (e.g., 'Gardens by the Bay, Singapore')"
+                      placeholder="Enter end location (e.g., 'Chennai Central', 'Adyar', 'Velachery')"
                       value={endLocation}
                       onChange={(e) => {
                         const value = e.target.value

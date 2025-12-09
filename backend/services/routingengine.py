@@ -23,14 +23,37 @@ def snap_coordinates_to_node(lat: float, lon: float) -> Optional[int]:
     if G is None:
         print("ERROR: Graph not loaded. Cannot snap coordinates.")
         return None
+    
+    # Check if coordinates are within the graph bounds
+    nodes = list(G.nodes(data=True))
+    if not nodes:
+        print("ERROR: Graph has no nodes")
+        return None
+    
+    lats = [data['y'] for _, data in nodes]
+    lons = [data['x'] for _, data in nodes]
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    
+    print(f"[SNAP] Snapping ({lat}, {lon}) to graph bounds: lat [{lat_min:.4f}, {lat_max:.4f}], lon [{lon_min:.4f}, {lon_max:.4f}]")
+    
+    # Add some tolerance (about 1km buffer)
+    tolerance = 0.01
+    if not (lat_min - tolerance <= lat <= lat_max + tolerance and lon_min - tolerance <= lon <= lon_max + tolerance):
+        print(f"[SNAP] ERROR: Coordinates ({lat}, {lon}) are outside the map area for Chennai!")
+        print(f"[SNAP] Please ensure your start and end points are within Chennai (lat: {lat_min:.2f}-{lat_max:.2f}, lon: {lon_min:.2f}-{lon_max:.2f})")
+        return None
         
     try:
         # osmnx.nearest_nodes efficiently finds the closest node ID.
         # It expects X (longitude) first, then Y (latitude).
         nearest_node = ox.nearest_nodes(G, X=lon, Y=lat)
+        print(f"[SNAP] Successfully snapped ({lat}, {lon}) to node {nearest_node}")
         return nearest_node
     except Exception as e:
-        print(f"Error snapping coordinates ({lat}, {lon}): {e}")
+        print(f"[SNAP] Error snapping coordinates ({lat}, {lon}): {e}")
+        import traceback
+        print(f"[SNAP] Traceback: {traceback.format_exc()}")
         return None
 
 # --- 2. CORE ROUTING FUNCTION ---
@@ -51,12 +74,21 @@ def get_safety_route(
     current_time = datetime.now()
     
     # 1. Snap coordinates
+    print(f"[ROUTING] Attempting to snap start coordinates: ({start_lat}, {start_lon})")
     start_node = snap_coordinates_to_node(start_lat, start_lon)
+    
+    print(f"[ROUTING] Attempting to snap end coordinates: ({end_lat}, {end_lon})")
     end_node = snap_coordinates_to_node(end_lat, end_lon)
     
-    if start_node is None or end_node is None:
-        print("Routing failed: Start or end coordinates could not be snapped to the map.")
+    if start_node is None:
+        print(f"[ROUTING] ERROR: Start coordinates ({start_lat}, {start_lon}) could not be snapped to the Chennai road network.")
         return None
+    
+    if end_node is None:
+        print(f"[ROUTING] ERROR: End coordinates ({end_lat}, {end_lon}) could not be snapped to the Chennai road network.")
+        return None
+    
+    print(f"[ROUTING] Successfully snapped: start_node={start_node}, end_node={end_node}")
 
     G = get_graph()
     if G is None: return None

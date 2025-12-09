@@ -63,12 +63,62 @@ async def routing_health():
     from services.riskscoreservice import get_graph
     
     graph = get_graph()
+    
+    # Get graph bounds
+    bounds = None
+    if graph and graph.number_of_nodes() > 0:
+        nodes = list(graph.nodes(data=True))
+        lats = [data['y'] for _, data in nodes]
+        lons = [data['x'] for _, data in nodes]
+        bounds = {
+            "lat_min": min(lats),
+            "lat_max": max(lats),
+            "lon_min": min(lons),
+            "lon_max": max(lons),
+            "center_lat": (min(lats) + max(lats)) / 2,
+            "center_lon": (min(lons) + max(lons)) / 2
+        }
+    
     return {
         "status": "healthy",
         "graph_loaded": graph is not None,
         "graph_nodes": graph.number_of_nodes() if graph else 0,
         "graph_edges": graph.number_of_edges() if graph else 0,
-        "supported_modes": ['safe', 'balanced', 'stealth', 'escort']
+        "supported_modes": ['safe', 'balanced', 'stealth', 'escort'],
+        "coverage_area": "Chennai, Tamil Nadu, India",
+        "bounds": bounds
+    }
+
+@router.get("/check-coordinates")
+async def check_coordinates(lat: float, lon: float):
+    """
+    Check if coordinates are within the map coverage area.
+    """
+    from services.riskscoreservice import get_graph
+    
+    graph = get_graph()
+    if not graph or graph.number_of_nodes() == 0:
+        raise HTTPException(status_code=503, detail="Graph not loaded")
+    
+    nodes = list(graph.nodes(data=True))
+    lats = [data['y'] for _, data in nodes]
+    lons = [data['x'] for _, data in nodes]
+    lat_min, lat_max = min(lats), max(lats)
+    lon_min, lon_max = min(lons), max(lons)
+    
+    tolerance = 0.01
+    in_bounds = (lat_min - tolerance <= lat <= lat_max + tolerance and 
+                 lon_min - tolerance <= lon <= lon_max + tolerance)
+    
+    return {
+        "in_bounds": in_bounds,
+        "coordinates": {"lat": lat, "lon": lon},
+        "bounds": {
+            "lat_min": lat_min,
+            "lat_max": lat_max,
+            "lon_min": lon_min,
+            "lon_max": lon_max
+        }
     }
 
 
@@ -129,7 +179,7 @@ async def calculate_route(mode: str, request: RouteRequest):
         print(f"[ROUTE API] Failed to calculate route - no path found or snapping failed")
         raise HTTPException(
             status_code=404, 
-            detail="Could not calculate a route between the specified points. Please ensure coordinates are within the map area."
+            detail="Could not calculate a route between the specified points. Please ensure both start and end locations are within Chennai, Tamil Nadu, India (approximate bounds: lat 12.85-13.23, lon 80.14-80.33). The coordinates you provided may be outside the available map data."
         )
     
     print(f"[ROUTE API] Successfully calculated route with {len(route_coords_list)} waypoints")
