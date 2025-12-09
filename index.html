@@ -1,0 +1,2952 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SafeTrace - Find the safest walking routes in your city">
+  <title>SafeTrace - 3D Safe Route Navigation</title>
+
+  <!-- MapLibre GL JS -->
+  <script src="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css" rel="stylesheet" />
+
+  <!-- Turf.js for geo calculations -->
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #ec4899;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --dark: #1e1b4b;
+      --darker: #0f0a2e;
+      --glass: rgba(15, 10, 46, 0.9);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--darker);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Control Panel */
+    .control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      width: 380px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .control-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .control-panel::-webkit-scrollbar-thumb {
+      background: var(--glass-border);
+      border-radius: 3px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .logo h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--text), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .badge-3d {
+      background: linear-gradient(135deg, var(--warning), var(--danger));
+      color: white;
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+
+    .badge-live {
+      background: linear-gradient(135deg, var(--success), #34d399);
+      color: white;
+      font-size: 0.6rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-left: 4px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* Live Navigation Banner */
+    .live-banner {
+      display: none;
+      background: linear-gradient(135deg, var(--success), #059669);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .live-banner.visible {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .live-banner h4 {
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .live-banner p {
+      font-size: 0.75rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+
+    /* Search Inputs */
+    .search-section {
+      margin-bottom: 16px;
+    }
+
+    .search-group {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    .search-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .search-label .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .search-label .dot.start {
+      background: var(--success);
+    }
+
+    .search-label .dot.end {
+      background: var(--danger);
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .search-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    /* Autocomplete */
+    .autocomplete-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1001;
+      display: none;
+    }
+
+    .autocomplete-dropdown.visible {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .autocomplete-item:last-child {
+      border-bottom: none;
+    }
+
+    .autocomplete-item:hover {
+      background: rgba(99, 102, 241, 0.2);
+    }
+
+    .autocomplete-item .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .autocomplete-item .address {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Route Selection */
+    .route-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .route-btn {
+      flex: 1;
+      padding: 12px 10px;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .route-btn:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .route-btn.active {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(236, 72, 153, 0.2));
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .route-btn .icon {
+      font-size: 1.2rem;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .get-route-btn,
+    .go-live-btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .get-route-btn {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    .go-live-btn {
+      background: linear-gradient(135deg, var(--success), #059669);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+
+    .go-live-btn.active {
+      background: linear-gradient(135deg, var(--danger), #dc2626);
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+    }
+
+    .get-route-btn:hover,
+    .go-live-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .get-route-btn:disabled,
+    .go-live-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* View Controls */
+    .view-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .view-btn {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .view-btn:hover {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .view-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    /* Route Info Cards */
+    .route-info {
+      display: none;
+    }
+
+    .route-info.visible {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .route-card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--glass-border);
+      transition: all 0.3s ease;
+    }
+
+    .route-card:hover {
+      transform: translateX(4px);
+      border-color: var(--primary);
+    }
+
+    .route-card.fastest {
+      border-left: 4px solid var(--warning);
+    }
+
+    .route-card.safest {
+      border-left: 4px solid var(--success);
+    }
+
+    .route-card h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+
+    .route-card.fastest h4 {
+      color: var(--warning);
+    }
+
+    .route-card.safest h4 {
+      color: var(--success);
+    }
+
+    .route-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .safety-bar {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .safety-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .safety-fill.high {
+      background: linear-gradient(90deg, var(--success), #34d399);
+    }
+
+    .safety-fill.medium {
+      background: linear-gradient(90deg, var(--warning), #fbbf24);
+    }
+
+    .safety-fill.low {
+      background: linear-gradient(90deg, var(--danger), #f87171);
+    }
+
+    .place-info {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+
+    .place-info .label {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+    }
+
+    .place-info .value {
+      color: var(--text);
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .btn-outline {
+      width: 100%;
+      padding: 12px;
+      background: transparent;
+      border: 2px solid var(--glass-border);
+      border-radius: 12px;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-outline:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 4px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .tab:hover {
+      color: var(--text);
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Rating Modal */
+    .rating-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 3000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rating-modal.visible {
+      display: flex;
+    }
+
+    .rating-modal-content {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(50px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .rating-modal-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .rating-modal-header h3 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--text), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .rating-modal-header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .modal-star-rating {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .modal-star {
+      font-size: 2.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      filter: grayscale(100%);
+    }
+
+    .modal-star:hover,
+    .modal-star.active {
+      filter: grayscale(0%);
+      transform: scale(1.15);
+    }
+
+    .quick-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .quick-tag {
+      padding: 8px 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .quick-tag:hover {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .quick-tag.selected.positive {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+
+    .quick-tag.selected.negative {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: white;
+    }
+
+    /* Generic selected for report tags */
+    .quick-tag.selected {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .issue-tag {
+      padding: 8px 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      user-select: none;
+    }
+
+    .issue-tag:hover {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .issue-tag.selected {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-color: #f59e0b;
+      color: white;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .modal-btn.primary {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+    }
+
+    .modal-btn.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+    }
+
+    .modal-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    /* SOS Button */
+    .sos-btn {
+      position: fixed;
+      bottom: 100px;
+      right: 20px;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border: 3px solid #fca5a5;
+      color: white;
+      font-size: 1.2rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: sosPulse 2s infinite;
+      transition: all 0.3s ease;
+    }
+
+    .sos-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 30px rgba(239, 68, 68, 0.7);
+    }
+
+    @keyframes sosPulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+      }
+
+      70% {
+        box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+
+    /* Report Issue Button */
+    .report-btn {
+      position: fixed;
+      bottom: 180px;
+      right: 20px;
+      width: 55px;
+      height: 55px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border: 2px solid #fcd34d;
+      color: white;
+      font-size: 1.3rem;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+      z-index: 2000;
+      transition: all 0.3s ease;
+    }
+
+    .report-btn:hover {
+      transform: scale(1.1);
+    }
+
+    /* SOS Settings Modal */
+    .sos-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 3500;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sos-modal.visible {
+      display: flex;
+    }
+
+    .sos-modal-content {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 24px;
+      width: 90%;
+      max-width: 420px;
+      animation: slideUp 0.3s ease;
+    }
+
+    /* Camera Preview */
+    .camera-preview {
+      width: 100%;
+      height: 200px;
+      background: #1a1a2e;
+      border-radius: 12px;
+      margin: 16px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .camera-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    .camera-preview canvas {
+      display: none;
+    }
+
+    .captured-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    .capture-btn {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: white;
+      border: 4px solid var(--primary);
+      cursor: pointer;
+    }
+
+    .retake-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    /* Verification Status */
+    .verification-status {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+      text-align: center;
+    }
+
+    .verification-status.pending {
+      border: 1px dashed #f59e0b;
+    }
+
+    .verification-status.verified {
+      border: 1px solid #10b981;
+    }
+
+    .verification-status.rejected {
+      border: 1px solid #ef4444;
+    }
+
+    .risk-score {
+      font-size: 2rem;
+      font-weight: 800;
+      margin: 8px 0;
+    }
+
+    .risk-score.high {
+      color: #ef4444;
+    }
+
+    .risk-score.medium {
+      color: #f59e0b;
+    }
+
+    .risk-score.low {
+      color: #10b981;
+    }
+
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      margin-top: 8px;
+    }
+
+    /* Rating UI in tab */
+    .rating-section h3 {
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .star-rating {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .star {
+      font-size: 2rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      filter: grayscale(100%);
+    }
+
+    .star:hover,
+    .star.active {
+      filter: grayscale(0%);
+      transform: scale(1.1);
+    }
+
+    .tags-container {
+      margin-bottom: 16px;
+    }
+
+    .tags-container h4 {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      padding: 6px 12px;
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .tag:hover {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+
+    .tag.selected {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .tag.negative.selected {
+      background: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .tag.positive.selected {
+      background: var(--success);
+      border-color: var(--success);
+    }
+
+    .segment-info {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+    }
+
+    .segment-info span {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .instructions {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.05));
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .instructions h3 {
+      font-size: 0.85rem;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .instructions p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 12px;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+    }
+
+    /* Legend */
+    .legend {
+      position: absolute;
+      bottom: 30px;
+      right: 20px;
+      z-index: 1000;
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .legend h4 {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+    }
+
+    .legend-color {
+      width: 24px;
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    .legend-color.safe {
+      background: #00ff88;
+    }
+
+    .legend-color.medium {
+      background: #ffaa00;
+    }
+
+    .legend-color.unsafe {
+      background: #ff0066;
+    }
+
+    .legend-color.fastest-route {
+      background: #f59e0b;
+    }
+
+    .legend-color.safest-route {
+      background: #10b981;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      z-index: 2000;
+      background: var(--success);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: var(--danger);
+    }
+
+    /* Loading */
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Full-screen Navigation Overlay */
+    .nav-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2500;
+      display: none;
+      flex-direction: column;
+      pointer-events: none;
+    }
+
+    .nav-overlay.visible {
+      display: flex;
+    }
+
+    .nav-top-bar {
+      background: linear-gradient(180deg, #1a73e8 0%, #1557b0 100%);
+      padding: 16px 20px;
+      color: white;
+      pointer-events: auto;
+    }
+
+    .nav-top-bar .nav-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .nav-top-bar .close-nav {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      font-size: 1.3rem;
+      cursor: pointer;
+    }
+
+    .nav-top-bar .nav-eta {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .nav-top-bar .nav-dist {
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+
+    .nav-direction-card {
+      background: white;
+      margin: 16px;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      pointer-events: auto;
+    }
+
+    .nav-direction-card .dir-icon {
+      width: 60px;
+      height: 60px;
+      background: #e8f0fe;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+
+    .nav-direction-card .dir-text {
+      flex: 1;
+    }
+
+    .nav-direction-card .dir-main {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .nav-direction-card .dir-sub {
+      font-size: 0.9rem;
+      color: #5f6368;
+      margin-top: 4px;
+    }
+
+    .nav-bottom-controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-around;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+      pointer-events: auto;
+    }
+
+    .nav-control-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      color: #5f6368;
+      font-size: 0.85rem;
+    }
+
+    .nav-control-btn .icon {
+      font-size: 1.5rem;
+    }
+
+    .nav-control-btn.active {
+      color: #1a73e8;
+    }
+
+    /* Start Navigation Button */
+    .start-nav-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #1a73e8, #1557b0);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+      box-shadow: 0 4px 15px rgba(26, 115, 232, 0.4);
+      transition: all 0.3s ease;
+    }
+
+    .start-nav-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(26, 115, 232, 0.5);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* MapLibre overrides */
+    .maplibregl-popup-content {
+      background: var(--glass) !important;
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px !important;
+      padding: 12px 16px !important;
+      color: var(--text) !important;
+      font-family: 'Inter', sans-serif !important;
+    }
+
+    .maplibregl-popup-close-button {
+      color: var(--text-muted) !important;
+    }
+
+    .maplibregl-ctrl-group {
+      background: var(--glass) !important;
+      border: 1px solid var(--glass-border) !important;
+      border-radius: 8px !important;
+    }
+
+    @media (max-width: 768px) {
+      .control-panel {
+        width: calc(100% - 40px);
+        max-height: 50vh;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <!-- Control Panel -->
+  <div class="control-panel">
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <div>
+        <h1>SafeTrace <span class="badge-3d">3D</span><span class="badge-live" id="liveBadge"
+            style="display:none;">LIVE</span></h1>
+        <p>Navigate safely, anywhere</p>
+      </div>
+    </div>
+
+    <!-- Live Navigation Banner -->
+    <div class="live-banner" id="liveBanner">
+      <h4><span class="live-dot"></span> Live Navigation Active</h4>
+      <p id="liveStatus">Tracking your position...</p>
+    </div>
+
+    <!-- View Controls -->
+    <div class="view-controls">
+      <button class="view-btn" onclick="setView('top')">🔝 Top</button>
+      <button class="view-btn active" onclick="setView('3d')">🏙️ 3D</button>
+      <button class="view-btn" onclick="setView('street')">🚶 Street</button>
+      <button class="view-btn active" id="heatmapToggle" onclick="toggleHeatmap()" style="margin-left: 8px;">🗺️
+        Heatmap</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="route">🗺️ Route</button>
+      <button class="tab" data-tab="rate">⭐ Rate</button>
+    </div>
+
+    <!-- Route Tab -->
+    <div class="tab-content active" id="routeTab">
+      <div class="search-section">
+        <div class="search-group">
+          <label class="search-label"><span class="dot start"></span> Start Location</label>
+          <input type="text" class="search-input" id="startInput" placeholder="Search for a place..."
+            autocomplete="off">
+          <div class="autocomplete-dropdown" id="startDropdown"></div>
+        </div>
+        <div class="search-group">
+          <label class="search-label"><span class="dot end"></span> Destination</label>
+          <input type="text" class="search-input" id="endInput" placeholder="Search for a place..." autocomplete="off">
+          <div class="autocomplete-dropdown" id="endDropdown"></div>
+        </div>
+      </div>
+
+      <div class="route-selector">
+        <button class="route-btn fastest" data-type="fastest"><span class="icon">⚡</span><span>Fastest</span></button>
+        <button class="route-btn safest" data-type="safest"><span class="icon">🛡️</span><span>Safest</span></button>
+        <button class="route-btn both active" data-type="both"><span class="icon">📍</span><span>Compare</span></button>
+      </div>
+
+      <div class="action-buttons">
+        <button class="get-route-btn" id="getRouteBtn" onclick="getRoute()" disabled>🚀 Get Route</button>
+        <button class="go-live-btn" id="goLiveBtn" onclick="toggleLiveTrackingWithGPS()">📍 Go Live</button>
+      </div>
+
+      <div class="route-info" id="routeInfo">
+        <div class="place-info" id="placeInfo" style="display:none;">
+          <div class="label">From</div>
+          <div class="value" id="startPlaceInfo">--</div>
+          <div class="label">To</div>
+          <div class="value" id="endPlaceInfo" style="margin-bottom:0;">--</div>
+        </div>
+
+        <div class="route-card fastest" id="fastestCard" style="display:none;">
+          <h4 style="display: flex; align-items: center; gap: 8px;">⚡ Fastest Route <span
+              style="width: 30px; height: 4px; background: #9333ea; border-radius: 2px; display: inline-block; border: 1px dashed #6b21a8;"></span>
+          </h4>
+          <div class="route-stats" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div class="stat">
+              <div class="stat-value" id="fastestDist">--</div>
+              <div class="stat-label">Distance (m)</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="fastestTime">--</div>
+              <div class="stat-label">Est. Time</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="fastestSafety">--</div>
+              <div class="stat-label">Safety</div>
+            </div>
+          </div>
+          <div class="safety-bar">
+            <div class="safety-fill" id="fastestBar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="route-card safest" id="safestCard" style="display:none;">
+          <h4 style="display: flex; align-items: center; gap: 8px;">🛡️ Safest Route <span
+              style="width: 30px; height: 4px; background: #06b6d4; border-radius: 2px; display: inline-block;"></span>
+          </h4>
+          <div class="route-stats" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div class="stat">
+              <div class="stat-value" id="safestDist">--</div>
+              <div class="stat-label">Distance (m)</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="safestTime">--</div>
+              <div class="stat-label">Est. Time</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="safestSafety">--</div>
+              <div class="stat-label">Safety</div>
+            </div>
+          </div>
+          <div class="safety-bar">
+            <div class="safety-fill" id="safestBar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Start Navigation Button (visible after routes calculated) -->
+        <div id="navigationControls" style="display:none;">
+          <button class="start-nav-btn" onclick="startFullNavigation()">
+            🧭 Start Navigation
+          </button>
+        </div>
+
+        <button class="btn-outline" onclick="clearRoutes()" style="margin-top: 12px;">🗑️ Clear & Start Over</button>
+      </div>
+    </div>
+
+    <!-- Rate Tab -->
+    <div class="tab-content" id="rateTab">
+      <div class="instructions" id="rateInstructions">
+        <h3>⭐ Rate a street segment</h3>
+        <p>Click on any street on the map to rate its safety. Your feedback helps others stay safe!</p>
+      </div>
+
+      <div id="ratingForm" style="display: none;">
+        <div class="segment-info">📍 Rating: <span id="ratingSegmentId">--</span></div>
+        <div class="rating-section">
+          <h3>How safe did you feel? (1-5)</h3>
+          <div class="star-rating">
+            <span class="star" data-rating="1">⭐</span>
+            <span class="star" data-rating="2">⭐</span>
+            <span class="star" data-rating="3">⭐</span>
+            <span class="star" data-rating="4">⭐</span>
+            <span class="star" data-rating="5">⭐</span>
+          </div>
+        </div>
+        <div class="tags-container">
+          <h4>🚨 Issues (optional)</h4>
+          <div class="tags" id="negativeTags">
+            <span class="tag negative" data-tag="dark">🌑 Dark</span>
+            <span class="tag negative" data-tag="isolated">😶 Isolated</span>
+            <span class="tag negative" data-tag="nolight">💡 No Lights</span>
+            <span class="tag negative" data-tag="dogs">🐕 Stray Dogs</span>
+            <span class="tag negative" data-tag="harassment">⚠️ Harassment</span>
+          </div>
+        </div>
+        <div class="tags-container">
+          <h4>✅ Positives (optional)</h4>
+          <div class="tags" id="positiveTags">
+            <span class="tag positive" data-tag="welllit">💡 Well Lit</span>
+            <span class="tag positive" data-tag="busy">👥 Busy Area</span>
+            <span class="tag positive" data-tag="cameras">📹 Cameras</span>
+            <span class="tag positive" data-tag="safe">✅ Feels Safe</span>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="submitFeedback()">📤 Submit Rating</button>
+        <button class="btn-outline" onclick="cancelRating()" style="margin-top:8px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <h4>Legend</h4>
+    <div class="legend-item">
+      <div class="legend-color safe"></div><span>Safe (0.8+)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color medium"></div><span>Moderate (0.5-0.8)</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color unsafe"></div><span>Avoid (&lt;0.5)</span>
+    </div>
+    <div class="legend-item" style="margin-top: 10px;">
+      <div class="legend-color fastest-route"></div><span>Fastest Route</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-color safest-route"></div><span>Safest Route</span>
+    </div>
+  </div>
+
+  <!-- Rating Modal (for live crossing) -->
+  <div class="rating-modal" id="ratingModal">
+    <div class="rating-modal-content">
+      <div class="rating-modal-header">
+        <h3>🛡️ Rate This Street</h3>
+        <p>You just crossed <span id="modalSegmentId">--</span></p>
+      </div>
+      <div class="modal-star-rating">
+        <span class="modal-star" data-rating="1">⭐</span>
+        <span class="modal-star" data-rating="2">⭐</span>
+        <span class="modal-star" data-rating="3">⭐</span>
+        <span class="modal-star" data-rating="4">⭐</span>
+        <span class="modal-star" data-rating="5">⭐</span>
+      </div>
+      <div class="quick-tags">
+        <span class="quick-tag positive" data-tag="safe">✅ Safe</span>
+        <span class="quick-tag positive" data-tag="welllit">💡 Well Lit</span>
+        <span class="quick-tag positive" data-tag="busy">👥 Busy</span>
+        <span class="quick-tag negative" data-tag="dark">🌑 Dark</span>
+        <span class="quick-tag negative" data-tag="isolated">😶 Isolated</span>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="skipRating()">Skip</button>
+        <button class="modal-btn primary" onclick="submitModalRating()">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Navigation Overlay (Google Maps style) -->
+  <div class="nav-overlay" id="navOverlay">
+    <div class="nav-top-bar">
+      <div class="nav-header">
+        <button class="close-nav" onclick="exitNavigation()">✕</button>
+        <div>
+          <div class="nav-eta" id="navEtaDisplay">12 min</div>
+          <div class="nav-dist" id="navDistDisplay">1.2 km • Safest route</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-direction-card">
+      <div class="dir-icon" id="navDirIcon">⬆️</div>
+      <div class="dir-text">
+        <div class="dir-main" id="navDirMain">Head north</div>
+        <div class="dir-sub" id="navDirSub">toward your destination</div>
+      </div>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <div class="nav-bottom-controls">
+      <button class="nav-control-btn" onclick="toggleNavSound()">
+        <span class="icon" id="navSoundIcon">🔊</span>
+        <span>Sound</span>
+      </button>
+      <button class="nav-control-btn active">
+        <span class="icon">🧭</span>
+        <span>Route</span>
+      </button>
+      <button class="nav-control-btn" onclick="exitNavigation()">
+        <span class="icon">✕</span>
+        <span>Exit</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SOS Button -->
+  <button class="sos-btn" id="sosBtn" onclick="triggerSOS()">SOS</button>
+
+  <!-- Report Issue Button -->
+  <button class="report-btn" id="reportBtn" onclick="openReportModal()">📷</button>
+
+  <!-- SOS Settings Modal -->
+  <div class="sos-modal" id="sosSettingsModal">
+    <div class="sos-modal-content">
+      <div class="rating-modal-header">
+        <h3>🚨 SOS Settings</h3>
+        <p>Set your emergency contact for SOS alerts</p>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; font-size: 0.9rem;">Emergency Contact Number</label>
+        <input type="tel" id="emergencyNumber" class="search-input" placeholder="+91 9043044776"
+          style="width: 100%; box-sizing: border-box;">
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 8px; font-size: 0.9rem;">Contact Name</label>
+        <input type="text" id="emergencyName" class="search-input" placeholder="Mom / Dad / Friend"
+          style="width: 100%; box-sizing: border-box;">
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeSosSettings()">Cancel</button>
+        <button class="modal-btn primary" onclick="saveSosSettings()">💾 Save Contact</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Issue Modal -->
+  <div class="sos-modal" id="reportModal">
+    <div class="sos-modal-content" style="max-width: 450px;">
+      <div class="rating-modal-header">
+        <h3>📷 Report Safety Issue</h3>
+        <p>Capture and report a safety concern</p>
+      </div>
+
+      <!-- Camera Preview -->
+      <div class="camera-preview" id="cameraPreview">
+        <video id="reportVideo" autoplay playsinline></video>
+        <canvas id="reportCanvas"></canvas>
+        <img id="capturedImg" class="captured-image" style="display:none;">
+        <button class="capture-btn" id="captureBtn" onclick="capturePhoto()"></button>
+        <button class="retake-btn" id="retakeBtn" style="display:none;" onclick="retakePhoto()">↩️ Retake</button>
+      </div>
+
+      <!-- Issue Description -->
+      <textarea id="issueDescription" class="search-input" rows="3"
+        placeholder="Describe the safety issue (e.g., Poor lighting, Suspicious activity, Stray dogs...)"
+        style="width: 100%; box-sizing: border-box; resize: none;"></textarea>
+
+      <!-- Issue Type Tags -->
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;" id="issueTagsContainer">
+        <span class="issue-tag" data-issue="poor_lighting">💡 Poor Lighting</span>
+        <span class="issue-tag" data-issue="suspicious">👁️ Suspicious</span>
+        <span class="issue-tag" data-issue="harassment">⚠️ Harassment</span>
+        <span class="issue-tag" data-issue="stray_dogs">🐕 Stray Dogs</span>
+        <span class="issue-tag" data-issue="road_damage">🚧 Road Damage</span>
+      </div>
+
+      <!-- Verification Status -->
+      <div class="verification-status pending" id="verificationStatus" style="display:none;">
+        <div style="font-size: 0.9rem; color: var(--text-muted);">AI Verification Status</div>
+        <div id="verificationText">⏳ Analyzing...</div>
+        <div class="risk-score" id="riskScoreDisplay">--</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">Risk Score</div>
+        <div class="ai-badge">🤖 AI Powered</div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button class="modal-btn secondary" onclick="closeReportModal()">Cancel</button>
+        <button class="modal-btn primary" id="submitReportBtn" onclick="submitReport()">📤 Submit Report</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize MapLibre GL
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/bright',
+      center: [80.2707, 13.0827],
+      zoom: 14, pitch: 45, bearing: -17.6,
+      canvasContextAttributes: { antialias: true }
+    });
+
+    map.addControl(new maplibregl.NavigationControl());
+
+    // State
+    let currentMode = 'route';
+    let routeType = 'both';
+    let startMarker = null, endMarker = null, userMarker = null;
+    let startPlace = null, endPlace = null;
+    let selectedSegmentId = null, selectedRating = 0, selectedTags = [];
+    let currentPopup = null, searchTimeout = null;
+
+    // Live tracking state
+    let isLiveTracking = false;
+    let watchId = null;
+    let segmentData = null;
+    let currentSegment = null;
+    let crossedSegments = new Set();
+    let modalRating = 0, modalTags = [];
+    let pendingRatingSegment = null;
+
+    // Map load
+    map.on('load', () => {
+      add3DBuildings();
+      loadHeatmap();
+      loadSegmentData();
+    });
+
+    // Load segment data for crossing detection
+    async function loadSegmentData() {
+      try {
+        const response = await fetch('/safety_heatmap.geojson');
+        segmentData = await response.json();
+        console.log('Loaded', segmentData.features.length, 'segments for tracking');
+      } catch (err) {
+        console.error('Error loading segment data:', err);
+      }
+    }
+
+    // 3D Buildings
+    function add3DBuildings() {
+      const layers = map.getStyle().layers;
+      let labelLayerId;
+      for (let i = 0; i < layers.length; i++) {
+        if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
+          labelLayerId = layers[i].id;
+          break;
+        }
+      }
+
+      map.addSource('openfreemap', { url: 'https://tiles.openfreemap.org/planet', type: 'vector' });
+
+      map.addLayer({
+        'id': '3d-buildings',
+        'source': 'openfreemap',
+        'source-layer': 'building',
+        'type': 'fill-extrusion',
+        'minzoom': 15,
+        'filter': ['!=', ['get', 'hide_3d'], true],
+        'paint': {
+          'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'render_height'], 0, '#3d2a6a', 20, '#5a4a8a', 50, '#7a6aaa'],
+          'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, ['get', 'render_height']],
+          'fill-extrusion-base': ['case', ['>=', ['zoom'], 16], ['get', 'render_min_height'], 0],
+          'fill-extrusion-opacity': 0.85
+        }
+      }, labelLayerId);
+    }
+
+    // Heatmap
+    async function loadHeatmap() {
+      try {
+        const response = await fetch('/safety_heatmap.geojson?t=' + Date.now());
+        const geojson = await response.json();
+
+        if (map.getLayer('heatmap-glow')) map.removeLayer('heatmap-glow');
+        if (map.getLayer('heatmap-lines')) map.removeLayer('heatmap-lines');
+        if (map.getSource('heatmap')) map.removeSource('heatmap');
+
+        map.addSource('heatmap', { type: 'geojson', data: geojson });
+
+        map.addLayer({ id: 'heatmap-glow', type: 'line', source: 'heatmap', paint: { 'line-color': ['get', 'color'], 'line-width': 12, 'line-opacity': 0.3, 'line-blur': 3 } });
+        map.addLayer({ id: 'heatmap-lines', type: 'line', source: 'heatmap', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'color'], '#666666'], 2, 5], 'line-opacity': ['case', ['==', ['get', 'color'], '#666666'], 0.4, 0.9] } });
+
+        map.on('click', 'heatmap-lines', (e) => {
+          if (currentMode === 'rate' && e.features.length > 0) {
+            selectSegmentForRating(e.features[0].properties.segment_id, e.lngLat);
+          }
+        });
+
+        map.on('mouseenter', 'heatmap-lines', () => { if (currentMode === 'rate') map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'heatmap-lines', () => { map.getCanvas().style.cursor = ''; });
+
+        segmentData = geojson;
+      } catch (err) {
+        console.error('Error loading heatmap:', err);
+      }
+    }
+
+    // ----- LIVE TRACKING -----
+    function toggleLiveTracking() {
+      if (isLiveTracking) {
+        stopLiveTracking();
+      } else {
+        startLiveTracking();
+      }
+    }
+
+    function startLiveTracking() {
+      if (!navigator.geolocation) {
+        showToast('Geolocation not supported', true);
+        return;
+      }
+
+      isLiveTracking = true;
+      document.getElementById('goLiveBtn').classList.add('active');
+      document.getElementById('goLiveBtn').textContent = '⏹️ Stop';
+      document.getElementById('liveBanner').classList.add('visible');
+      document.getElementById('liveBadge').style.display = 'inline';
+
+      watchId = navigator.geolocation.watchPosition(
+        handlePositionUpdate,
+        (err) => {
+          console.error('Geolocation error:', err);
+          showToast('Could not get location', true);
+          stopLiveTracking();
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+      );
+
+      showToast('📍 Live tracking started!');
+    }
+
+    function stopLiveTracking() {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+
+      isLiveTracking = false;
+      document.getElementById('goLiveBtn').classList.remove('active');
+      document.getElementById('goLiveBtn').textContent = '📍 Go Live';
+      document.getElementById('liveBanner').classList.remove('visible');
+      document.getElementById('liveBadge').style.display = 'none';
+
+      if (userMarker) {
+        userMarker.remove();
+        userMarker = null;
+      }
+
+      crossedSegments.clear();
+      currentSegment = null;
+      showToast('Live tracking stopped');
+    }
+
+    function handlePositionUpdate(position) {
+      const { latitude, longitude, accuracy } = position.coords;
+
+      // Update user marker
+      if (userMarker) {
+        userMarker.setLngLat([longitude, latitude]);
+      } else {
+        const el = document.createElement('div');
+        el.innerHTML = '📍';
+        el.style.fontSize = '32px';
+        el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))';
+
+        userMarker = new maplibregl.Marker({ element: el })
+          .setLngLat([longitude, latitude])
+          .addTo(map);
+      }
+
+      // Center map on user
+      map.easeTo({ center: [longitude, latitude], duration: 500 });
+
+      // Update status
+      document.getElementById('liveStatus').textContent = `Accuracy: ${Math.round(accuracy)}m`;
+
+      // Detect segment crossing
+      detectSegmentCrossing(longitude, latitude);
+    }
+
+    function detectSegmentCrossing(lng, lat) {
+      if (!segmentData || !segmentData.features) return;
+
+      const userPoint = turf.point([lng, lat]);
+      let nearestSegment = null;
+      let minDistance = Infinity;
+
+      // Find nearest segment
+      for (const feature of segmentData.features) {
+        if (feature.geometry.type !== 'LineString') continue;
+
+        const line = turf.lineString(feature.geometry.coordinates);
+        const distance = turf.pointToLineDistance(userPoint, line, { units: 'meters' });
+
+        if (distance < minDistance && distance < 30) { // Within 30 meters
+          minDistance = distance;
+          nearestSegment = feature.properties.segment_id;
+        }
+      }
+
+      // Check if we've entered a new segment
+      if (nearestSegment && nearestSegment !== currentSegment) {
+        // User left previous segment - prompt for rating
+        if (currentSegment && !crossedSegments.has(currentSegment)) {
+          crossedSegments.add(currentSegment);
+          promptForRating(currentSegment);
+        }
+
+        currentSegment = nearestSegment;
+        console.log('Entered segment:', currentSegment);
+      }
+    }
+
+    async function promptForRating(segmentId) {
+      pendingRatingSegment = segmentId;
+      modalRating = 0;
+      modalTags = [];
+
+      document.getElementById('modalSegmentId').textContent = 'Loading...';
+      document.querySelectorAll('.modal-star').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.quick-tag').forEach(t => t.classList.remove('selected'));
+
+      document.getElementById('ratingModal').classList.add('visible');
+
+      // Fetch road name
+      try {
+        const response = await fetch(`/api/segment/${segmentId}`);
+        const data = await response.json();
+        document.getElementById('modalSegmentId').textContent = data.road_name || `Segment ${segmentId}`;
+      } catch (err) {
+        document.getElementById('modalSegmentId').textContent = `Segment ${segmentId}`;
+      }
+    }
+
+    // Modal star rating
+    document.querySelectorAll('.modal-star').forEach(star => {
+      star.addEventListener('click', () => {
+        modalRating = parseInt(star.dataset.rating);
+        document.querySelectorAll('.modal-star').forEach((s, i) => {
+          s.classList.toggle('active', i < modalRating);
+        });
+      });
+    });
+
+    // Modal quick tags
+    document.querySelectorAll('.quick-tag').forEach(tag => {
+      tag.addEventListener('click', () => {
+        tag.classList.toggle('selected');
+        const tagName = tag.dataset.tag;
+        if (tag.classList.contains('selected')) {
+          modalTags.push(tagName);
+        } else {
+          modalTags = modalTags.filter(t => t !== tagName);
+        }
+      });
+    });
+
+    function skipRating() {
+      document.getElementById('ratingModal').classList.remove('visible');
+      pendingRatingSegment = null;
+    }
+
+    async function submitModalRating() {
+      if (modalRating === 0) {
+        showToast('Please select a rating', true);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            segment_id: pendingRatingSegment,
+            rating: modalRating,
+            tags: modalTags,
+            persona: 'walker'
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast(`✅ Rated segment ${pendingRatingSegment}!`);
+          loadHeatmap();
+        }
+      } catch (err) {
+        console.error('Rating error:', err);
+        showToast('Failed to submit rating', true);
+      }
+
+      document.getElementById('ratingModal').classList.remove('visible');
+      pendingRatingSegment = null;
+    }
+
+    // ----- PLACE SEARCH -----
+    const startInput = document.getElementById('startInput');
+    const endInput = document.getElementById('endInput');
+    const startDropdown = document.getElementById('startDropdown');
+    const endDropdown = document.getElementById('endDropdown');
+
+    async function searchPlaces(query, dropdown, isStart) {
+      if (query.length < 2) { dropdown.classList.remove('visible'); return; }
+
+      try {
+        const response = await fetch(`/api/places/search?query=${encodeURIComponent(query)}&limit=5`);
+        const data = await response.json();
+
+        dropdown.innerHTML = '';
+
+        if (data.results && data.results.length > 0) {
+          data.results.forEach(place => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.innerHTML = `<div class="name">${place.name}</div><div class="address">${place.formatted}</div>`;
+            item.onclick = () => selectPlace(place, isStart);
+            dropdown.appendChild(item);
+          });
+          dropdown.classList.add('visible');
+        } else {
+          dropdown.classList.remove('visible');
+        }
+      } catch (err) {
+        dropdown.classList.remove('visible');
+      }
+    }
+
+    function selectPlace(place, isStart) {
+      if (isStart) {
+        startPlace = place;
+        startInput.value = place.name;
+        startDropdown.classList.remove('visible');
+        if (startMarker) startMarker.remove();
+        startMarker = new maplibregl.Marker({ color: '#10b981' }).setLngLat([place.lng, place.lat]).addTo(map);
+      } else {
+        endPlace = place;
+        endInput.value = place.name;
+        endDropdown.classList.remove('visible');
+        if (endMarker) endMarker.remove();
+        endMarker = new maplibregl.Marker({ color: '#ef4444' }).setLngLat([place.lng, place.lat]).addTo(map);
+      }
+
+      updateGetRouteButton();
+
+      if (startPlace && endPlace) {
+        const bounds = new maplibregl.LngLatBounds().extend([startPlace.lng, startPlace.lat]).extend([endPlace.lng, endPlace.lat]);
+        map.fitBounds(bounds, { padding: 100, pitch: 45 });
+      } else if (place) {
+        map.flyTo({ center: [place.lng, place.lat], zoom: 17 });
+      }
+    }
+
+    function updateGetRouteButton() {
+      document.getElementById('getRouteBtn').disabled = !(startPlace && endPlace);
+    }
+
+    startInput.addEventListener('input', (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => searchPlaces(e.target.value, startDropdown, true), 300); });
+    endInput.addEventListener('input', (e) => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => searchPlaces(e.target.value, endDropdown, false), 300); });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.search-group')) { startDropdown.classList.remove('visible'); endDropdown.classList.remove('visible'); } });
+
+    // ----- ROUTING -----
+    async function getRoute() {
+      if (!startPlace || !endPlace) return;
+
+      const btn = document.getElementById('getRouteBtn');
+      btn.innerHTML = '<span class="loading-spinner"></span> Calculating...';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/api/route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start_lat: startPlace.lat, start_lng: startPlace.lng, end_lat: endPlace.lat, end_lng: endPlace.lng, route_type: routeType })
+        });
+
+        const data = await response.json();
+
+        if (map.getLayer('fastest-route')) map.removeLayer('fastest-route');
+        if (map.getLayer('safest-route')) map.removeLayer('safest-route');
+        if (map.getSource('fastest-route')) map.removeSource('fastest-route');
+        if (map.getSource('safest-route')) map.removeSource('safest-route');
+
+        document.getElementById('routeInfo').classList.add('visible');
+        document.getElementById('placeInfo').style.display = 'block';
+        document.getElementById('startPlaceInfo').textContent = startPlace.formatted || startPlace.name;
+        document.getElementById('endPlaceInfo').textContent = endPlace.formatted || endPlace.name;
+
+        if (data.fastest && (routeType === 'fastest' || routeType === 'both')) {
+          map.addSource('fastest-route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: data.fastest.coordinates } } });
+          map.addLayer({ id: 'fastest-route', type: 'line', source: 'fastest-route', paint: { 'line-color': '#9333ea', 'line-width': 5, 'line-opacity': 0.85, 'line-dasharray': [3, 2] } });
+
+          document.getElementById('fastestCard').style.display = 'block';
+          document.getElementById('fastestDist').textContent = formatDistance(data.fastest.total_length);
+          document.getElementById('fastestTime').textContent = formatTime(data.fastest.estimated_time_mins);
+          document.getElementById('fastestSafety').textContent = data.fastest.avg_safety_score;
+          const bar = document.getElementById('fastestBar');
+          bar.style.width = (data.fastest.avg_safety_score * 100) + '%';
+          bar.className = 'safety-fill ' + getSafetyClass(data.fastest.avg_safety_score);
+        } else { document.getElementById('fastestCard').style.display = 'none'; }
+
+        if (data.safest && (routeType === 'safest' || routeType === 'both')) {
+          map.addSource('safest-route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: data.safest.coordinates } } });
+          map.addLayer({ id: 'safest-route', type: 'line', source: 'safest-route', paint: { 'line-color': '#06b6d4', 'line-width': 7, 'line-opacity': 0.95 } });
+
+          document.getElementById('safestCard').style.display = 'block';
+          document.getElementById('safestDist').textContent = formatDistance(data.safest.total_length);
+          document.getElementById('safestTime').textContent = formatTime(data.safest.estimated_time_mins);
+          document.getElementById('safestSafety').textContent = data.safest.avg_safety_score;
+          const bar = document.getElementById('safestBar');
+          bar.style.width = (data.safest.avg_safety_score * 100) + '%';
+          bar.className = 'safety-fill ' + getSafetyClass(data.safest.avg_safety_score);
+        } else { document.getElementById('safestCard').style.display = 'none'; }
+
+        const allCoords = [];
+        if (data.fastest) allCoords.push(...data.fastest.coordinates);
+        if (data.safest) allCoords.push(...data.safest.coordinates);
+        if (allCoords.length > 0) {
+          const bounds = allCoords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(allCoords[0], allCoords[0]));
+          map.fitBounds(bounds, { padding: 80, pitch: 45 });
+        }
+
+        // Store route for voice navigation (prefer safest route)
+        currentRouteCoords = data.safest ? data.safest.coordinates : (data.fastest ? data.fastest.coordinates : []);
+
+        // Store full route data for navigation
+        lastRouteData = data;
+
+        // Show navigation controls
+        document.getElementById('navigationControls').style.display = 'block';
+
+        showToast('✅ Routes calculated!');
+      } catch (err) {
+        showToast('Could not calculate route', true);
+      }
+
+      btn.innerHTML = '🚀 Get Route';
+      btn.disabled = false;
+    }
+
+    // Format time in minutes to user-friendly string
+    function formatTime(mins) {
+      if (mins < 1) return '< 1 min';
+      if (mins < 60) return Math.round(mins) + ' min';
+      const hours = Math.floor(mins / 60);
+      const remainMins = Math.round(mins % 60);
+      if (remainMins === 0) return hours + 'h';
+      return hours + 'h ' + remainMins + 'm';
+    }
+
+    // Format distance in meters to user-friendly string
+    function formatDistance(meters) {
+      if (meters < 1000) return Math.round(meters) + 'm';
+      return (meters / 1000).toFixed(1) + 'km';
+    }
+
+    function getSafetyClass(score) {
+      if (score >= 0.7) return 'high';
+      if (score >= 0.4) return 'medium';
+      return 'low';
+    }
+
+    function clearRoutes() {
+      if (startMarker) startMarker.remove();
+      if (endMarker) endMarker.remove();
+      if (map.getLayer('fastest-route')) map.removeLayer('fastest-route');
+      if (map.getLayer('safest-route')) map.removeLayer('safest-route');
+      if (map.getSource('fastest-route')) map.removeSource('fastest-route');
+      if (map.getSource('safest-route')) map.removeSource('safest-route');
+
+      startMarker = null; endMarker = null; startPlace = null; endPlace = null;
+      startInput.value = ''; endInput.value = '';
+      document.getElementById('routeInfo').classList.remove('visible');
+      document.getElementById('placeInfo').style.display = 'none';
+      document.getElementById('navigationControls').style.display = 'none';
+
+      // Stop any active navigation
+      stopVoiceNavigation();
+      currentRouteCoords = [];
+
+      updateGetRouteButton();
+      map.flyTo({ center: [80.2707, 13.0827], zoom: 16, pitch: 45 });
+    }
+
+    // Heatmap visibility
+    let heatmapVisible = true;
+
+    function toggleHeatmap() {
+      heatmapVisible = !heatmapVisible;
+      const btn = document.getElementById('heatmapToggle');
+
+      if (map.getLayer('heatmap-lines')) {
+        map.setLayoutProperty('heatmap-glow', 'visibility', heatmapVisible ? 'visible' : 'none');
+        map.setLayoutProperty('heatmap-lines', 'visibility', heatmapVisible ? 'visible' : 'none');
+      }
+
+      btn.classList.toggle('active', heatmapVisible);
+      btn.textContent = heatmapVisible ? '🗺️ Heatmap' : '🗺️ Off';
+      showToast(heatmapVisible ? '🗺️ Safety heatmap visible' : '🗺️ Safety heatmap hidden');
+    }
+
+    // View controls
+    function setView(view) {
+      // Only toggle view buttons, not heatmap toggle
+      document.querySelectorAll('.view-btn:not(#heatmapToggle)').forEach(b => b.classList.remove('active'));
+      if (event.target.id !== 'heatmapToggle') {
+        event.target.classList.add('active');
+      }
+      switch (view) {
+        case 'top': map.easeTo({ pitch: 0, bearing: 0, duration: 1000 }); break;
+        case '3d': map.easeTo({ pitch: 45, bearing: -17.6, duration: 1000 }); break;
+        case 'street': map.easeTo({ pitch: 75, zoom: 18, duration: 1000 }); break;
+      }
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+        currentMode = tab.dataset.tab;
+        if (currentMode === 'route') cancelRating();
+      });
+    });
+
+    // Route type buttons
+    document.querySelectorAll('.route-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.route-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        routeType = btn.dataset.type;
+
+        // Also show/hide route layers based on selection
+        updateRouteVisibility();
+      });
+    });
+
+    function updateRouteVisibility() {
+      const fastestLayer = map.getLayer('fastest-route');
+      const safestLayer = map.getLayer('safest-route');
+
+      if (fastestLayer) {
+        const showFastest = routeType === 'fastest' || routeType === 'both';
+        map.setLayoutProperty('fastest-route', 'visibility', showFastest ? 'visible' : 'none');
+        document.getElementById('fastestCard').style.display = showFastest ? 'block' : 'none';
+      }
+
+      if (safestLayer) {
+        const showSafest = routeType === 'safest' || routeType === 'both';
+        map.setLayoutProperty('safest-route', 'visibility', showSafest ? 'visible' : 'none');
+        document.getElementById('safestCard').style.display = showSafest ? 'block' : 'none';
+      }
+    }
+
+    // Star rating (tab)
+    document.querySelectorAll('.star').forEach(star => {
+      star.addEventListener('click', () => {
+        selectedRating = parseInt(star.dataset.rating);
+        document.querySelectorAll('.star').forEach((s, i) => s.classList.toggle('active', i < selectedRating));
+      });
+    });
+
+    // Tag selection (tab)
+    document.querySelectorAll('.tag').forEach(tag => {
+      tag.addEventListener('click', () => {
+        tag.classList.toggle('selected');
+        const tagName = tag.dataset.tag;
+        if (tag.classList.contains('selected')) selectedTags.push(tagName);
+        else selectedTags = selectedTags.filter(t => t !== tagName);
+      });
+    });
+
+    async function selectSegmentForRating(segmentId, lngLat) {
+      if (currentPopup) currentPopup.remove();
+      selectedSegmentId = segmentId;
+      document.getElementById('rateInstructions').style.display = 'none';
+      document.getElementById('ratingForm').style.display = 'block';
+      document.getElementById('ratingSegmentId').textContent = 'Loading road name...';
+
+      // Fetch road name from API
+      try {
+        const response = await fetch(`/api/segment/${segmentId}`);
+        const data = await response.json();
+        const roadName = data.road_name || `Segment ${segmentId}`;
+        document.getElementById('ratingSegmentId').textContent = roadName;
+        currentPopup = new maplibregl.Popup().setLngLat(lngLat).setHTML(`<b>${roadName}</b>`).addTo(map);
+      } catch (err) {
+        document.getElementById('ratingSegmentId').textContent = `Segment ${segmentId}`;
+        currentPopup = new maplibregl.Popup().setLngLat(lngLat).setHTML(`<b>Segment ${segmentId}</b>`).addTo(map);
+      }
+
+      selectedRating = 0; selectedTags = [];
+      document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tag').forEach(t => t.classList.remove('selected'));
+    }
+
+    function cancelRating() {
+      if (currentPopup) currentPopup.remove();
+      selectedSegmentId = null; selectedRating = 0; selectedTags = [];
+      document.getElementById('rateInstructions').style.display = 'block';
+      document.getElementById('ratingForm').style.display = 'none';
+      document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tag').forEach(t => t.classList.remove('selected'));
+    }
+
+    async function submitFeedback() {
+      if (!selectedSegmentId || selectedRating === 0) { showToast('Please select a segment and rating', true); return; }
+
+      try {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segment_id: selectedSegmentId, rating: selectedRating, tags: selectedTags, persona: 'walker' })
+        });
+        const data = await response.json();
+        if (data.success) { showToast(`✅ ${data.message}`); cancelRating(); loadHeatmap(); }
+        else showToast('Failed to submit rating', true);
+      } catch (err) { showToast('Error submitting feedback', true); }
+    }
+
+    // ----- VOICE NAVIGATION -----
+    let voiceNavigationActive = false;
+    let voiceMuted = false;
+    let currentRouteCoords = [];
+    let currentRouteIndex = 0;
+    let navigationInterval = null;
+
+    function speak(text) {
+      if (voiceMuted || !voiceNavigationActive) return;
+
+      if ('speechSynthesis' in window) {
+        // Cancel any ongoing speech
+        speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        utterance.lang = 'en-IN';  // Indian English
+
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    function startVoiceNavigation() {
+      if (!currentRouteCoords || currentRouteCoords.length === 0) {
+        showToast('Please calculate a route first', true);
+        return;
+      }
+
+      voiceNavigationActive = true;
+      voiceMuted = false;
+      currentRouteIndex = 0;
+
+      document.getElementById('startNavBtn').textContent = '🔊 Navigating...';
+      document.getElementById('startNavBtn').disabled = true;
+      document.getElementById('muteBtn').textContent = '🔇 Mute';
+
+      // Initial announcement
+      const routeType = document.getElementById('safestCard').style.display !== 'none' ? 'safest' : 'fastest';
+      speak(`Starting navigation on the ${routeType} route. Stay safe!`);
+
+      // Simulate navigation progress
+      navigationInterval = setInterval(simulateNavigationStep, 3000);
+
+      showToast('🔊 Voice navigation started');
+    }
+
+    function simulateNavigationStep() {
+      if (!voiceNavigationActive || currentRouteIndex >= currentRouteCoords.length - 1) {
+        if (currentRouteIndex >= currentRouteCoords.length - 1) {
+          speak('You have arrived at your destination. Thank you for using SafeTrace!');
+          stopVoiceNavigation();
+        }
+        return;
+      }
+
+      currentRouteIndex++;
+      const progress = Math.round((currentRouteIndex / currentRouteCoords.length) * 100);
+
+      // Generate navigation instructions
+      const instructions = [
+        'Continue straight ahead.',
+        'In 50 meters, turn right.',
+        'Turn left at the next junction.',
+        'Continue on this road for 200 meters.',
+        'Keep going straight.',
+        'Take a slight right.',
+        'Bear left at the fork.'
+      ];
+
+      // Occasionally add safety warnings
+      const safetyWarnings = [
+        'Caution: Entering a moderate safety zone.',
+        'Warning: This area has lower safety ratings. Stay alert.',
+        'Good news: You are now in a safe zone.',
+        'Keep your phone handy in this area.',
+        'This road is well-lit and busy. Good choice!'
+      ];
+
+      // Speak instruction
+      const instruction = instructions[currentRouteIndex % instructions.length];
+      speak(instruction);
+
+      // Occasionally add safety warning (20% chance)
+      if (Math.random() < 0.2) {
+        setTimeout(() => {
+          const warning = safetyWarnings[Math.floor(Math.random() * safetyWarnings.length)];
+          speak(warning);
+        }, 2000);
+      }
+
+      // Announce progress at milestones
+      if (progress === 25 || progress === 50 || progress === 75) {
+        setTimeout(() => {
+          speak(`You are ${progress} percent through your journey.`);
+        }, 1500);
+      }
+    }
+
+    function stopVoiceNavigation() {
+      voiceNavigationActive = false;
+
+      if (navigationInterval) {
+        clearInterval(navigationInterval);
+        navigationInterval = null;
+      }
+
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+      }
+
+      document.getElementById('startNavBtn').textContent = '🔊 Start Voice Navigation';
+      document.getElementById('startNavBtn').disabled = false;
+
+      showToast('Navigation stopped');
+    }
+
+    function toggleVoiceMute() {
+      voiceMuted = !voiceMuted;
+      document.getElementById('muteBtn').textContent = voiceMuted ? '🔈 Unmute' : '🔇 Mute';
+
+      if (voiceMuted && 'speechSynthesis' in window) {
+        speechSynthesis.cancel();
+      }
+
+      showToast(voiceMuted ? '🔇 Voice muted' : '🔈 Voice unmuted');
+    }
+
+    // ----- SOS FUNCTIONALITY -----
+    // Always ask for emergency contact on each page load
+    let emergencyContact = '';
+    let emergencyName = '';
+    let tripleClickCount = 0;
+    let tripleClickTimer = null;
+
+    // Always prompt for emergency contact on page load
+    setTimeout(() => {
+      document.getElementById('sosSettingsModal').classList.add('visible');
+      showToast('🚨 Enter your emergency contact for SOS', true);
+    }, 1500);
+
+    // Triple-click SOS trigger (only on map, not in modals/panels)
+    document.getElementById('map').addEventListener('click', (e) => {
+      // Don't trigger if clicking on panel or modal
+      if (e.target.closest('.panel') || e.target.closest('.sos-modal') || e.target.closest('.rating-modal')) {
+        return;
+      }
+
+      tripleClickCount++;
+
+      if (tripleClickCount === 1) {
+        tripleClickTimer = setTimeout(() => {
+          tripleClickCount = 0;
+        }, 500);
+      }
+
+      if (tripleClickCount >= 3) {
+        clearTimeout(tripleClickTimer);
+        tripleClickCount = 0;
+        triggerSOS();
+      }
+    });
+
+    function triggerSOS() {
+      if (!emergencyContact) {
+        // First time - ask to set up contact
+        document.getElementById('sosSettingsModal').classList.add('visible');
+        showToast('Please set up your emergency contact first', true);
+        return;
+      }
+
+      // Get current location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude.toFixed(5);
+            const lng = position.coords.longitude.toFixed(5);
+            sendSOSMessage(lat, lng);
+          },
+          () => {
+            // Location failed - send without coordinates
+            sendSOSMessage('Unknown', 'Unknown');
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        sendSOSMessage('Unknown', 'Unknown');
+      }
+    }
+
+    function sendSOSMessage(lat, lng) {
+      const cleanNumber = emergencyContact.replace(/[^0-9]/g, '');
+      const message = encodeURIComponent(
+        `🚨 SOS ALERT from SafeTrace!\n\n` +
+        `I need help! This is an emergency.\n\n` +
+        `📍 My Location:\nhttps://www.google.com/maps?q=${lat},${lng}\n\n` +
+        `Coordinates: ${lat}, ${lng}\n` +
+        `Time: ${new Date().toLocaleString()}`
+      );
+
+      const whatsappUrl = `https://wa.me/${cleanNumber}?text=${message}`;
+      window.open(whatsappUrl, '_blank');
+
+      showToast('🚨 SOS sent to ' + (emergencyName || 'emergency contact'));
+
+      // Also speak alert if possible
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance('SOS alert sent. Help is on the way.');
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    function openSosSettings() {
+      document.getElementById('emergencyNumber').value = emergencyContact;
+      document.getElementById('emergencyName').value = emergencyName;
+      document.getElementById('sosSettingsModal').classList.add('visible');
+    }
+
+    function closeSosSettings() {
+      document.getElementById('sosSettingsModal').classList.remove('visible');
+    }
+
+    function saveSosSettings() {
+      emergencyContact = document.getElementById('emergencyNumber').value.trim();
+      emergencyName = document.getElementById('emergencyName').value.trim();
+
+      if (!emergencyContact) {
+        showToast('Please enter a phone number', true);
+        return;
+      }
+
+      // Only saved in memory for this session (not persisted)
+      closeSosSettings();
+      showToast('✅ Emergency contact set: ' + (emergencyName || emergencyContact));
+    }
+
+    // Long-press to edit SOS settings
+    let sosLongPress = null;
+    document.getElementById('sosBtn').addEventListener('mousedown', () => {
+      sosLongPress = setTimeout(() => {
+        openSosSettings();
+      }, 1000);
+    });
+    document.getElementById('sosBtn').addEventListener('mouseup', () => {
+      clearTimeout(sosLongPress);
+    });
+    document.getElementById('sosBtn').addEventListener('mouseleave', () => {
+      clearTimeout(sosLongPress);
+    });
+
+    // ----- REPORT ISSUE FUNCTIONALITY -----
+    let reportStream = null;
+    let capturedImageData = null;
+    let selectedIssueTags = [];
+
+    async function openReportModal() {
+      document.getElementById('reportModal').classList.add('visible');
+      document.getElementById('verificationStatus').style.display = 'none';
+      document.getElementById('issueDescription').value = '';
+      document.getElementById('capturedImg').style.display = 'none';
+      document.getElementById('captureBtn').style.display = 'block';
+      document.getElementById('retakeBtn').style.display = 'none';
+      selectedIssueTags = [];
+      document.querySelectorAll('.issue-tag').forEach(t => t.classList.remove('selected'));
+      capturedImageData = null;
+
+      // Start camera
+      try {
+        reportStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        document.getElementById('reportVideo').srcObject = reportStream;
+      } catch (err) {
+        showToast('Camera access denied', true);
+      }
+    }
+
+    function closeReportModal() {
+      document.getElementById('reportModal').classList.remove('visible');
+      if (reportStream) {
+        reportStream.getTracks().forEach(track => track.stop());
+        reportStream = null;
+      }
+    }
+
+    function capturePhoto() {
+      const video = document.getElementById('reportVideo');
+      const canvas = document.getElementById('reportCanvas');
+      const img = document.getElementById('capturedImg');
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+
+      capturedImageData = canvas.toDataURL('image/jpeg');
+      img.src = capturedImageData;
+      img.style.display = 'block';
+      video.style.display = 'none';
+      document.getElementById('captureBtn').style.display = 'none';
+      document.getElementById('retakeBtn').style.display = 'block';
+
+      showToast('📸 Photo captured');
+    }
+
+    function retakePhoto() {
+      const video = document.getElementById('reportVideo');
+      const img = document.getElementById('capturedImg');
+
+      img.style.display = 'none';
+      video.style.display = 'block';
+      document.getElementById('captureBtn').style.display = 'block';
+      document.getElementById('retakeBtn').style.display = 'none';
+      capturedImageData = null;
+    }
+
+    // Set up issue tag click handlers
+    document.querySelectorAll('.issue-tag').forEach(tag => {
+      tag.addEventListener('click', function (e) {
+        e.stopPropagation(); // Prevent triple-click SOS
+        this.classList.toggle('selected');
+        const issue = this.dataset.issue;
+        if (this.classList.contains('selected')) {
+          if (!selectedIssueTags.includes(issue)) {
+            selectedIssueTags.push(issue);
+          }
+        } else {
+          selectedIssueTags = selectedIssueTags.filter(t => t !== issue);
+        }
+        console.log('Selected tags:', selectedIssueTags);
+      });
+    });
+
+    async function submitReport() {
+      if (!capturedImageData) {
+        showToast('Please capture a photo first', true);
+        return;
+      }
+
+      const description = document.getElementById('issueDescription').value.trim();
+
+      if (!description && selectedIssueTags.length === 0) {
+        showToast('Please describe the issue or select tags', true);
+        return;
+      }
+
+      document.getElementById('submitReportBtn').textContent = '⏳ Analyzing...';
+      document.getElementById('submitReportBtn').disabled = true;
+
+      // Get location FIRST
+      let reportLat = 13.0827, reportLng = 80.2707;
+      document.getElementById('verificationText').textContent = '📍 Getting location...';
+
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 5000 });
+          });
+          reportLat = pos.coords.latitude;
+          reportLng = pos.coords.longitude;
+        } catch (e) {
+          showToast('Location unavailable, using default', true);
+        }
+      }
+
+      // Show verification status with location
+      const statusDiv = document.getElementById('verificationStatus');
+      statusDiv.style.display = 'block';
+      statusDiv.className = 'verification-status pending';
+      document.getElementById('verificationText').innerHTML = `⏳ AI analyzing...<br><small>📍 ${reportLat.toFixed(5)}, ${reportLng.toFixed(5)}</small>`;
+      document.getElementById('riskScoreDisplay').textContent = '--';
+
+      // Simulate AI verification (2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Mock AI result - risk score 0 to 1
+      const riskScore = Math.round(Math.random() * 100) / 100; // 0.00 to 1.00
+      let riskLevel, statusClass, statusText;
+
+      if (riskScore >= 0.7) {
+        riskLevel = 'high';
+        statusClass = 'verified';
+        statusText = '✅ Verified - High Risk Issue';
+      } else if (riskScore >= 0.4) {
+        riskLevel = 'medium';
+        statusClass = 'verified';
+        statusText = '✅ Verified - Moderate Concern';
+      } else {
+        riskLevel = 'low';
+        statusClass = 'verified';
+        statusText = '✅ Verified - Low Risk';
+      }
+
+      statusDiv.className = 'verification-status ' + statusClass;
+      document.getElementById('verificationText').innerHTML = statusText + `<br><small>📍 ${reportLat.toFixed(5)}, ${reportLng.toFixed(5)}</small>`;
+      document.getElementById('riskScoreDisplay').textContent = riskScore.toFixed(2);
+      document.getElementById('riskScoreDisplay').className = 'risk-score ' + riskLevel;
+
+      // Submit to backend
+      try {
+        await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            segment_id: 0, // Will be matched to nearest segment
+            rating: Math.max(1, Math.floor((1 - riskScore) * 5)),
+            tags: selectedIssueTags,
+            comment: description,
+            location: { lat: reportLat, lng: reportLng },
+            report_type: 'safety_issue',
+            risk_score: riskScore
+          })
+        });
+      } catch (e) { }
+
+      document.getElementById('submitReportBtn').textContent = '✅ Submitted!';
+
+      showToast('📤 Report submitted - Risk: ' + riskScore.toFixed(2));
+
+      // Close after 2 seconds
+      setTimeout(() => {
+        closeReportModal();
+        document.getElementById('submitReportBtn').textContent = '📤 Submit Report';
+        document.getElementById('submitReportBtn').disabled = false;
+      }, 2000);
+    }
+
+    // ----- FULL NAVIGATION MODE -----
+    let navRouteData = null;
+    let navStepIndex = 0;
+    let navInterval = null;
+
+    function startFullNavigation() {
+      // Get route data from last calculated route
+      const route = lastRouteData?.safest || lastRouteData?.fastest;
+      if (!route || !currentRouteCoords || currentRouteCoords.length === 0) {
+        showToast('Please calculate a route first', true);
+        return;
+      }
+
+      navRouteData = route;
+      navStepIndex = 0;
+
+      // Show navigation overlay
+      document.getElementById('navOverlay').classList.add('visible');
+      document.querySelector('.control-panel').style.display = 'none';
+
+      // Set ETA and distance
+      document.getElementById('navEtaDisplay').textContent = formatTime(route.estimated_time_mins);
+      document.getElementById('navDistDisplay').textContent = `${formatDistance(route.total_length)} • ${lastRouteData?.safest ? 'Safest' : 'Fastest'} route`;
+
+      // Start voice navigation
+      startVoiceNavigation();
+
+      // Center on route start and rotate view
+      map.flyTo({
+        center: currentRouteCoords[0],
+        zoom: 18,
+        pitch: 60,
+        bearing: getBearing(currentRouteCoords[0], currentRouteCoords[1] || currentRouteCoords[0])
+      });
+
+      // Simulate navigation steps
+      simulateNavSteps();
+
+      showToast('🧭 Navigation started');
+    }
+
+    function exitNavigation() {
+      // Hide overlay
+      document.getElementById('navOverlay').classList.remove('visible');
+      document.querySelector('.control-panel').style.display = 'block';
+
+      // Stop voice and interval
+      stopVoiceNavigation();
+      if (navInterval) {
+        clearInterval(navInterval);
+        navInterval = null;
+      }
+
+      // Reset view
+      map.easeTo({ pitch: 45, zoom: 15 });
+
+      showToast('Navigation ended');
+    }
+
+    function toggleNavSound() {
+      voiceMuted = !voiceMuted;
+      document.getElementById('navSoundIcon').textContent = voiceMuted ? '🔇' : '🔊';
+      showToast(voiceMuted ? '🔇 Sound muted' : '🔊 Sound on');
+    }
+
+    function getBearing(start, end) {
+      const startLat = start[1] * Math.PI / 180;
+      const startLng = start[0] * Math.PI / 180;
+      const endLat = end[1] * Math.PI / 180;
+      const endLng = end[0] * Math.PI / 180;
+      const dLng = endLng - startLng;
+      const x = Math.sin(dLng) * Math.cos(endLat);
+      const y = Math.cos(startLat) * Math.sin(endLat) - Math.sin(startLat) * Math.cos(endLat) * Math.cos(dLng);
+      return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+    }
+
+    function simulateNavSteps() {
+      const directions = [
+        { icon: '⬆️', main: 'Head straight', sub: 'Continue on current road' },
+        { icon: '↗️', main: 'Turn slight right', sub: 'onto the main street' },
+        { icon: '⬆️', main: 'Continue straight', sub: 'for 200 meters' },
+        { icon: '↰', main: 'Turn left', sub: 'at the intersection' },
+        { icon: '⬆️', main: 'Keep going straight', sub: 'destination ahead' },
+        { icon: '🏁', main: 'Arrive at destination', sub: 'on your right' }
+      ];
+
+      let stepIdx = 0;
+      navInterval = setInterval(() => {
+        if (stepIdx >= directions.length) {
+          clearInterval(navInterval);
+          speak('You have arrived at your destination.');
+          setTimeout(exitNavigation, 3000);
+          return;
+        }
+
+        const step = directions[stepIdx];
+        document.getElementById('navDirIcon').textContent = step.icon;
+        document.getElementById('navDirMain').textContent = step.main;
+        document.getElementById('navDirSub').textContent = step.sub;
+
+        speak(step.main + ', ' + step.sub);
+
+        // Update ETA countdown
+        const remainingMins = Math.max(1, Math.round((directions.length - stepIdx) * 2));
+        document.getElementById('navEtaDisplay').textContent = remainingMins + ' min';
+
+        stepIdx++;
+      }, 5000);
+    }
+
+    let lastRouteData = null;
+
+    // Store route data when routes are calculated
+    const originalGetRoute = getRoute;
+
+    // Update toggleLiveTracking to use GPS as start
+    function toggleLiveTrackingWithGPS() {
+      if (isLiveTracking) {
+        stopLiveTracking();
+        return;
+      }
+
+      showToast('📍 Getting your location...');
+
+      if (!navigator.geolocation) {
+        showToast('Geolocation not supported', true);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // Set start input to current location
+          document.getElementById('startInput').value = 'My Current Location';
+          startLocation = { lat, lng };
+
+          // Add marker for current location
+          if (startMarker) startMarker.remove();
+          startMarker = new maplibregl.Marker({ color: '#4285f4' })
+            .setLngLat([lng, lat])
+            .addTo(map);
+
+          // Center map on location
+          map.flyTo({
+            center: [lng, lat],
+            zoom: 16,
+            pitch: 45
+          });
+
+          showToast('📍 Location set! Now enter your destination');
+
+          // Focus on end input
+          document.getElementById('endInput').focus();
+
+          // Start live tracking
+          startLiveTracking();
+        },
+        (error) => {
+          showToast('Could not get location: ' + error.message, true);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.toggle('error', isError);
+      toast.classList.add('visible');
+      setTimeout(() => toast.classList.remove('visible'), 3000);
+    }
+  </script>
+</body>
+
+</html>

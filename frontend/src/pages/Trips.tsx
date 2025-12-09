@@ -1,4 +1,4 @@
-import { Route, Clock, MapPin, Sparkles, Package, Calendar, Users, MapPinIcon, Search, Utensils, Camera, Train, Navigation } from 'lucide-react'
+import { Route, MapPin, Sparkles, Package, Calendar, Search, Utensils, Camera, Train, Navigation } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
@@ -26,7 +26,7 @@ interface POI {
 
 export default function Trips() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<'builder' | 'packing'>('builder')
+  const [_activeTab, _setActiveTab] = useState<'builder' | 'packing'>('builder')
   const [showItineraryBuilder, setShowItineraryBuilder] = useState(false)
   const [showPackingAssistant, setShowPackingAssistant] = useState(false)
 

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -145,7 +145,81 @@ export const deactivateSOS = async (token: string): Promise<void> => {
 
 // Health check
 export const healthCheck = async (): Promise<any> => {
-  const response = await api.get('/')
+  const response = await api.get('/api/health')
+  return response.data
+}
+
+// Feedback/Rating interfaces
+export interface FeedbackRequest {
+  segment_id?: number
+  lat?: number
+  lng?: number
+  rating: number
+  tags?: string[]
+  persona?: string
+  comment?: string
+}
+
+export interface FeedbackResponse {
+  success: boolean
+  segment_id: number
+  new_score: number
+  message: string
+}
+
+export interface SegmentInfo {
+  segment_id: number
+  road_name: string
+  osmid?: number
+  coordinates: [number, number][]
+  length: number
+  score: number
+  confidence: number
+  num_feedback: number
+  recent_tags: string[]
+}
+
+export interface TagsResponse {
+  negative: string[]
+  positive: string[]
+}
+
+export interface HeatmapFeature {
+  type: 'Feature'
+  properties: {
+    segment_id: number
+    score: number | null
+    color: string
+  }
+  geometry: {
+    type: 'LineString'
+    coordinates: [number, number][]
+  }
+}
+
+export interface HeatmapGeoJSON {
+  type: 'FeatureCollection'
+  features: HeatmapFeature[]
+}
+
+// Feedback/Rating API
+export const submitFeedback = async (request: FeedbackRequest): Promise<FeedbackResponse> => {
+  const response = await api.post<FeedbackResponse>('/api/feedback', request)
+  return response.data
+}
+
+export const getSegmentInfo = async (segmentId: number): Promise<SegmentInfo> => {
+  const response = await api.get<SegmentInfo>(`/api/segment/${segmentId}`)
+  return response.data
+}
+
+export const getAvailableTags = async (): Promise<TagsResponse> => {
+  const response = await api.get<TagsResponse>('/api/tags')
+  return response.data
+}
+
+export const getSafetyHeatmap = async (): Promise<HeatmapGeoJSON> => {
+  const response = await api.get<HeatmapGeoJSON>('/safety_heatmap.geojson')
   return response.data
 }
 
