@@ -15,7 +15,8 @@ router = APIRouter(
 
 # Gemini API Configuration
 GEMINI_API_KEY = "AIzaSyD9VG9SD-LoC41UDFj5MbD9uV10WDmBGfU"
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+
 
 # --- REQUEST MODELS ---
 
@@ -511,5 +512,5 @@ async def ai_health():
     return {
         "status": "healthy",
         "services": ["itinerary-builder", "packing-assistant", "poi-search"],
-        "models": ["gemini-2.5-flash"]
+        "models": ["gemini-2.5-pro"]
     }
