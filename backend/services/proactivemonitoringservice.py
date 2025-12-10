@@ -5,6 +5,7 @@ import numpy as np
 from typing import List, Tuple, Optional, Dict, Any
 from datetime import datetime
 import osmnx as ox
+from math import radians, cos, sin, asin, sqrt
 
 # Import necessary services
 from config import MODE_RISK_MULTIPLIERS
@@ -19,6 +20,27 @@ HAZARD_CHECK_AHEAD_STEPS = 5
 MAX_DEVIATION_METERS = 50 
 # Default risk score threshold for triggering a 'spike' alert (e.g., above 7.0)
 RISK_SPIKE_THRESHOLD = 7.0 
+
+
+# --- UTILITY FUNCTIONS ---
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great circle distance in meters between two points 
+    on the earth (specified in decimal degrees).
+    """
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    
+    # Radius of earth in meters
+    r = 6371000
+    return c * r
 
 
 # --- CORE MONITORING FUNCTIONS ---
@@ -136,8 +158,8 @@ def check_for_deviation_alert(
     # We must iterate over all points in the planned route and find the minimum distance
     for route_lat, route_lon in planned_route_coords:
         # Calculate Haversine distance in meters
-        distance = ox.distance.haversine(
-            current_lat, current_lon, route_lat, route_lon, units='m'
+        distance = haversine_distance(
+            current_lat, current_lon, route_lat, route_lon
         )
         min_distance_meters = min(min_distance_meters, distance)
         

@@ -159,7 +159,7 @@ async def calculate_route(mode: str, request: RouteRequest):
     print(f"[ROUTE API] Calculating {mode} route from ({request.start_lat}, {request.start_lon}) to ({request.end_lat}, {request.end_lon})")
     
     try:
-        route_coords_list = get_safety_route(
+        route_result = get_safety_route(
             start_lat=request.start_lat,
             start_lon=request.start_lon,
             end_lat=request.end_lat,
@@ -174,7 +174,7 @@ async def calculate_route(mode: str, request: RouteRequest):
             detail=f"Internal server error during route calculation: {str(e)}"
         )
 
-    if not route_coords_list:
+    if not route_result:
         # This handles cases where snapping fails or no path is found
         print(f"[ROUTE API] Failed to calculate route - no path found or snapping failed")
         raise HTTPException(
@@ -182,7 +182,8 @@ async def calculate_route(mode: str, request: RouteRequest):
             detail="Could not calculate a route between the specified points. Please ensure both start and end locations are within Chennai, Tamil Nadu, India (approximate bounds: lat 12.85-13.23, lon 80.14-80.33). The coordinates you provided may be outside the available map data."
         )
     
-    print(f"[ROUTE API] Successfully calculated route with {len(route_coords_list)} waypoints")
+    route_coords_list, segment_ids = route_result
+    print(f"[ROUTE API] Successfully calculated route with {len(route_coords_list)} waypoints and {len(segment_ids)} segments")
 
     # 2. Convert the list of Python tuples [(lat, lon), ...] into Pydantic models for the JSON response
     response_coords = [Coordinate(lat=lat, lon=lon) for lat, lon in route_coords_list]
@@ -196,8 +197,22 @@ async def calculate_route(mode: str, request: RouteRequest):
     
     print(f"[ROUTE API] Calculated distance: {total_distance_km:.2f} km for {mode} mode")
     
+    # 4. Get segment information
+    from services.riskscoreservice import get_segment_score
+    from models.schemas import SegmentInfo
+    
+    segments_info = []
+    for seg_id in segment_ids:
+        seg_data = get_segment_score(seg_id)
+        segments_info.append(SegmentInfo(
+            segment_id=seg_id,
+            score=seg_data['score'],
+            num_feedback=seg_data['num_feedback']
+        ))
+    
     return RouteResponse(
         route_coords=response_coords,
         distance_approx_km=round(total_distance_km, 2), 
-        mode_used=mode
+        mode_used=mode,
+        segments=segments_info
     )

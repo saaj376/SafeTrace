@@ -14,6 +14,7 @@ from routes import routingservice
 from routes import sosservice        # New: Handles /sos/* endpoints
 from routes import safetyalertservice # New: Handles /alerts/* endpoints
 from routes import aiservice         # New: Handles /ai/* endpoints
+from routes import feedbackservice   # New: Handles /feedback/* endpoints
 
 
 # --- 1. INITIALIZE FASTAPI APP ---
@@ -66,6 +67,7 @@ app.include_router(routingservice.router)
 app.include_router(sosservice.router) 
 app.include_router(safetyalertservice.router)
 app.include_router(aiservice.router)
+app.include_router(feedbackservice.router)
 
 
 # --- 5. ROOT HEALTH CHECK ENDPOINT ---

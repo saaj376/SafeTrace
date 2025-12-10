@@ -35,10 +35,17 @@ export interface RouteRequest {
   end_lon: number
 }
 
+export interface SegmentInfo {
+  segment_id: number
+  score: number
+  num_feedback: number
+}
+
 export interface RouteResponse {
   route_coords: Coordinate[]
   distance_approx_km: number
   mode_used: string
+  segments?: SegmentInfo[]
 }
 
 export interface MonitoringRequest {
@@ -141,6 +148,36 @@ export const getGuardianStatus = async (
 
 export const deactivateSOS = async (token: string): Promise<void> => {
   await api.post('/sos/deactivate', { token })
+}
+
+// Feedback API
+export interface SegmentFeedback {
+  segment_id: number
+  rating: number
+}
+
+export interface RouteFeedbackRequest {
+  overall_rating: number
+  segment_feedback: SegmentFeedback[]
+  route_mode?: string
+}
+
+export interface FeedbackResponse {
+  success: boolean
+  message: string
+  updated_segments: number
+}
+
+export const submitRouteFeedback = async (
+  request: RouteFeedbackRequest
+): Promise<FeedbackResponse> => {
+  const response = await api.post<FeedbackResponse>('/feedback/route-review', request)
+  return response.data
+}
+
+export const getSegmentInfo = async (segmentId: number): Promise<SegmentInfo> => {
+  const response = await api.get<SegmentInfo>(`/feedback/segment/${segmentId}`)
+  return response.data
 }
 
 // Health check

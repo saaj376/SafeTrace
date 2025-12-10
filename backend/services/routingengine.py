@@ -78,12 +78,14 @@ def get_safety_route(
     end_lat: float, 
     end_lon: float, 
     mode: str
-) -> Optional[List[Tuple[float, float]]]:
+) -> Optional[Tuple[List[Tuple[float, float]], List[int]]]:
     """
     Calculates the safest route between two coordinates based on the chosen mode.
     Uses different weighting strategies per mode for varied routes.
     
-    Returns: A list of (latitude, longitude) tuples representing the path geometry.
+    Returns: A tuple of (route_coords, segment_ids) where:
+        - route_coords: List of (latitude, longitude) tuples representing the path geometry
+        - segment_ids: List of segment IDs used in this route
     """
     current_time = datetime.now()
     
@@ -181,13 +183,30 @@ def get_safety_route(
         print(f"Routing failed due to NetworkX error: {e}")
         return None
 
-    # 4. Convert node IDs back to coordinates
+    # 4. Convert node IDs back to coordinates and collect segment IDs
+    from .riskscoreservice import get_segment_id
+    
     route_coords = []
+    segment_ids = []
+    
     for node_id in route_nodes:
         coords = get_node_coords(node_id)
         if coords:
             route_coords.append(coords) # coords is stored as (lat, lon)
     
-    print(f"[ROUTING] Route calculated: {len(route_nodes)} nodes, {len(route_coords)} coordinates in {mode} mode")
+    # Get segment IDs for each edge in the route
+    for i in range(len(route_nodes) - 1):
+        u = route_nodes[i]
+        v = route_nodes[i + 1]
+        
+        # Find the edge key (k) that exists
+        if G.has_edge(u, v):
+            # Get the first edge key (usually 0)
+            k = list(G[u][v].keys())[0]
+            seg_id = get_segment_id(u, v, k)
+            if seg_id:
+                segment_ids.append(seg_id)
+    
+    print(f"[ROUTING] Route calculated: {len(route_nodes)} nodes, {len(route_coords)} coordinates, {len(segment_ids)} segments in {mode} mode")
             
-    return route_coords
+    return (route_coords, segment_ids)

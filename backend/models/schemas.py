@@ -19,11 +19,18 @@ class Coordinate(BaseModel):
     lat: float
     lon: float
 
+class SegmentInfo(BaseModel):
+    """Schema for segment information in a route."""
+    segment_id: int
+    score: float
+    num_feedback: int
+
 class RouteResponse(BaseModel):
     """Schema for the final route data returned to the frontend."""
     route_coords: List[Coordinate] = Field(..., description="List of (lat, lon) pairs defining the path geometry.")
     distance_approx_km: float = Field(..., description="Approximate total route distance in km.")
     mode_used: str = Field(..., description="The routing mode used (e.g., 'safe', 'balanced').")
+    segments: Optional[List[SegmentInfo]] = Field(None, description="List of segments in the route with their IDs and scores.")
     # You could add 'total_risk_score' here if calculated
 
 
@@ -49,6 +56,29 @@ class SOSDeactivateRequest(BaseModel):
     token: str = Field(..., description="Unique session token to end.")
 
 
+# =================================================================
+# III. FEEDBACK/REVIEW SCHEMAS
+# =================================================================
+
+class SegmentFeedback(BaseModel):
+    """Schema for individual segment feedback."""
+    segment_id: int
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1 (worst) to 5 (best)")
+
+class RouteFeedbackRequest(BaseModel):
+    """Schema for route review/feedback submission."""
+    overall_rating: int = Field(..., ge=1, le=5, description="Overall route rating from 1-5")
+    segment_feedback: List[SegmentFeedback] = Field(default=[], description="List of segments with specific ratings")
+    route_mode: str = Field(..., description="The mode used for this route")
+
+class FeedbackResponse(BaseModel):
+    """Response after submitting feedback."""
+    success: bool
+    message: str
+    updated_segments: int
+
+
+# Original remaining schemas...
 # =================================================================
 # III. SAFETY ALERT SCHEMAS (Used by safetyalertsservice.py)
 # =================================================================
