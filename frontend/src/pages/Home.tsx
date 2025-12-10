@@ -550,14 +550,37 @@ export default function Home() {
 
 
   const handleActivateSOS = async () => {
-    if (!currentLocation) {
-      alert('Unable to get your location. Please enable location services.')
-      return
+    // Try to get current location if not available
+    let location = currentLocation
+    
+    if (!location) {
+      try {
+        // Request location permission and get current position
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error('Geolocation not supported'))
+            return
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000
+          })
+        })
+        
+        location = {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        }
+        setCurrentLocation(location)
+      } catch (error) {
+        alert('Unable to get your location. Please enable location services.')
+        return
+      }
     }
 
     // Send WhatsApp SOS message
-    const lat = currentLocation.lat.toFixed(5)
-    const lng = currentLocation.lon.toFixed(5)
+    const lat = location.lat.toFixed(5)
+    const lng = location.lon.toFixed(5)
     const message = encodeURIComponent(
       `🚨 SOS ALERT from SafeTrace!\n\n` +
       `I need help! This is an emergency.\n\n` +
@@ -571,8 +594,8 @@ export default function Home() {
     try {
       const response = await activateSOS({
         user_id: 'user_123',
-        current_lat: currentLocation.lat,
-        current_lon: currentLocation.lon,
+        current_lat: location.lat,
+        current_lon: location.lon,
       })
 
       setSosActive(true)

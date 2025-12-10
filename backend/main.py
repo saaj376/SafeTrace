@@ -16,6 +16,7 @@ import math
 import time
 import httpx
 from shapely.geometry import Point, LineString
+from routes import aiservice
 
 app = FastAPI(title="SafeTrace API", description="Safe routing for pedestrians")
 
@@ -36,6 +37,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Routers
+app.include_router(aiservice.router)
 
 # --------------------------------------------------------------
 # LOAD DATA

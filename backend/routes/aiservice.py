@@ -14,12 +14,7 @@ router = APIRouter(
 )
 
 # Gemini API Configuration
-import os
-
-# Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    print("WARNING: GEMINI_API_KEY not found in environment variables. AI features will fail.")
+GEMINI_API_KEY = "AIzaSyD9VG9SD-LoC41UDFj5MbD9uV10WDmBGfU"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 # --- REQUEST MODELS ---
@@ -65,18 +60,6 @@ class POISearchRequest(BaseModel):
     """Request model for POI search"""
     location: str
     poi_type: str  # restaurants, attractions, transport
-
-class JournalEnhanceRequest(BaseModel):
-    """Request model for journal enhancement"""
-    title: str
-    content: str
-    photos_count: int = 0
-
-class JournalEnhanceResponse(BaseModel):
-    """Response model for enhanced journal"""
-    enhanced_content: str
-    original_content: str
-    title: str
 
 class POIResult(BaseModel):
     name: str
@@ -520,61 +503,6 @@ async def search_poi(request: POISearchRequest):
             detail=f"Failed to search POI: {str(e)}"
         )
 
-@router.post("/enhance-journal", response_model=JournalEnhanceResponse)
-async def enhance_journal(request: JournalEnhanceRequest):
-    """
-    Enhance a journal entry with AI-generated content that makes it more engaging,
-    poetic, and memorable. Preserves the original story while improving narrative quality.
-    """
-    try:
-        # Create a detailed prompt for enhancing the journal
-        prompt = f"""You are a creative writing assistant specializing in travel narratives and personal memoirs.
-
-I have a travel journal entry that I'd like you to enhance and make more engaging while preserving the core story and emotions.
-
-Original Entry:
-Title: {request.title}
-Content: {request.content}
-
-Please enhance this journal entry by:
-1. Making the narrative more vivid and descriptive
-2. Adding sensory details (sights, sounds, smells, textures)
-3. Improving the emotional depth and reflection
-4. Organizing thoughts in a more compelling way
-5. Adding thoughtful insights about the travel experience
-{f'6. Mentioning the {request.photos_count} photos that were captured' if request.photos_count > 0 else ''}
-
-Keep the same general story and facts, but make it more memorable and beautifully written.
-Write the enhanced version directly without any introductions or explanations."""
-
-        enhanced_text = call_gemini_api(prompt)
-        
-        return JournalEnhanceResponse(
-            enhanced_content=enhanced_text,
-            original_content=request.content,
-            title=request.title
-        )
-    
-    except HTTPException as e:
-        # If API is rate-limited or times out, return a graceful fallback
-        if e.status_code in [429, 504]:
-            print(f"[AI] API unavailable ({e.status_code}). Returning enhanced fallback.")
-            fallback_enhanced = f"{request.content}\n\n[AI Enhancement temporarily unavailable - showing original content]"
-            return JournalEnhanceResponse(
-                enhanced_content=fallback_enhanced,
-                original_content=request.content,
-                title=request.title
-            )
-        raise
-    
-    except Exception as e:
-        print(f"[AI] Error enhancing journal: {str(e)}")
-        print(f"[AI] Traceback: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to enhance journal: {str(e)}"
-        )
-
 @router.get("/health")
 async def ai_health():
     """
@@ -582,6 +510,6 @@ async def ai_health():
     """
     return {
         "status": "healthy",
-        "services": ["itinerary-builder", "packing-assistant", "poi-search", "journal-enhancement"],
+        "services": ["itinerary-builder", "packing-assistant", "poi-search"],
         "models": ["gemini-2.5-flash"]
     }
