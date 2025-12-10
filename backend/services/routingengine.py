@@ -37,12 +37,26 @@ def snap_coordinates_to_node(lat: float, lon: float) -> Optional[int]:
     
     print(f"[SNAP] Snapping ({lat}, {lon}) to graph bounds: lat [{lat_min:.4f}, {lat_max:.4f}], lon [{lon_min:.4f}, {lon_max:.4f}]")
     
-    # Add some tolerance (about 1km buffer)
-    tolerance = 0.01
-    if not (lat_min - tolerance <= lat <= lat_max + tolerance and lon_min - tolerance <= lon <= lon_max + tolerance):
-        print(f"[SNAP] ERROR: Coordinates ({lat}, {lon}) are outside the map area for Chennai!")
-        print(f"[SNAP] Please ensure your start and end points are within Chennai (lat: {lat_min:.2f}-{lat_max:.2f}, lon: {lon_min:.2f}-{lon_max:.2f})")
-        return None
+    # Auto-adjust coordinates that are slightly outside bounds
+    adjusted = False
+    original_lat, original_lon = lat, lon
+    
+    if lat < lat_min:
+        lat = lat_min
+        adjusted = True
+    elif lat > lat_max:
+        lat = lat_max
+        adjusted = True
+        
+    if lon < lon_min:
+        lon = lon_min
+        adjusted = True
+    elif lon > lon_max:
+        lon = lon_max
+        adjusted = True
+    
+    if adjusted:
+        print(f"[SNAP] Adjusted coordinates from ({original_lat}, {original_lon}) to ({lat}, {lon}) to fit within map bounds")
         
     try:
         # osmnx.nearest_nodes efficiently finds the closest node ID.

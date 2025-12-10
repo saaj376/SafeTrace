@@ -2,8 +2,10 @@ import uvicorn
 import sys
 import os
 
-os.chdir(r"C:\Users\saaja\Downloads\blistering-barnacles\backend")
-sys.path.insert(0, r"C:\Users\saaja\Downloads\blistering-barnacles\backend")
+# Get the directory where this script is located
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(BACKEND_DIR)
+sys.path.insert(0, BACKEND_DIR)
 
 print(f"CWD: {os.getcwd()}")
 print(f"sys.path[0]: {sys.path[0]}")
