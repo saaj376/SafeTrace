@@ -1,0 +1,22 @@
+[
+  {
+    "segment_id": 614,
+    "rating": 5,
+    "tags": [],
+    "timestamp": 1765321870,
+    "time_of_day": "night",
+    "persona": "walker",
+    "trust_weight": 1.0,
+    "comment": ""
+  },
+  {
+    "segment_id": 9925,
+    "rating": 5,
+    "tags": [],
+    "timestamp": 1765321893,
+    "time_of_day": "night",
+    "persona": "walker",
+    "trust_weight": 1.0,
+    "comment": ""
+  }
+]
