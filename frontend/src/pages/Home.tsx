@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Star } from 'lucide-react'
 import Map from '../components/Map'
@@ -206,7 +206,7 @@ export default function Home() {
   }, [])
 
   // Handle segment click for rating
-  const handleSegmentClick = async (segmentId: number, _lngLat: { lng: number; lat: number }) => {
+  const handleSegmentClick = useCallback(async (segmentId: number, _lngLat: { lng: number; lat: number }) => {
     if (activeTab !== 'rate') return
 
     setSelectedSegmentId(segmentId)
@@ -221,7 +221,7 @@ export default function Home() {
       console.error('Error getting segment info:', err)
       setSelectedSegmentInfo(null)
     }
-  }
+  }, [activeTab])
 
   // Submit rating
   const handleSubmitRating = async () => {
