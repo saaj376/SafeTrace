@@ -623,6 +623,88 @@ async def geojson():
     """Legacy endpoint - serves the heatmap file"""
     return FileResponse("safety_heatmap.geojson")
 
+@app.post("/api/reset-heatmap")
+async def reset_heatmap():
+    """Regenerate segment scores and heatmap with random safety scores for demonstration purposes"""
+    import random
+    
+    # Generate random scores for all segments and save to segment_scores.json
+    new_scores = {}
+    for seg in SEGMENTS:
+        seg_id = str(seg['segment_id'])
+        score = round(random.uniform(0, 1), 2)
+        new_scores[seg_id] = {
+            "segment_id": int(seg_id),
+            "score": score,
+            "confidence": 0.5,
+            "num_feedback": 1
+        }
+    
+    # Update global SCORES dictionary
+    SCORES.clear()
+    SCORES.update(new_scores)
+    
+    # Save to file
+    with open(SCORES_FILE, 'w') as f:
+        json.dump(SCORES, f, indent=2)
+    
+    # Regenerate heatmap from segment_scores.json
+    def score_to_color(score):
+        if score is None:
+            return "#666666"
+        if score >= 0.8:
+            return "#00ff00"
+        if score >= 0.5:
+            return "#ffaa00"
+        return "#ff0066"
+    
+    features = []
+    for seg in SEGMENTS:
+        seg_id = seg["segment_id"]
+        coords = seg["coordinates"]
+        
+        score_entry = SCORES.get(str(seg_id))
+        score_value = score_entry["score"] if score_entry else None
+        
+        color = score_to_color(score_value)
+        
+        feature = {
+            "type": "Feature",
+            "properties": {
+                "segment_id": seg_id,
+                "score": score_value,
+                "color": color
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": coords
+            }
+        }
+        features.append(feature)
+    
+    geojson_output = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    with open("safety_heatmap.geojson", "w") as f:
+        json.dump(geojson_output, f)
+    
+    green_count = sum(1 for f in features if f["properties"]["score"] and f["properties"]["score"] >= 0.8)
+    orange_count = sum(1 for f in features if f["properties"]["score"] and 0.5 <= f["properties"]["score"] < 0.8)
+    red_count = sum(1 for f in features if f["properties"]["score"] and f["properties"]["score"] < 0.5)
+    
+    return {
+        "status": "success",
+        "message": f"Heatmap reset with {len(features)} randomly scored segments",
+        "stats": {
+            "total": len(features),
+            "green": green_count,
+            "orange": orange_count,
+            "red": red_count
+        }
+    }
+
 # Place Search Endpoints
 @app.get("/api/places/search")
 async def search_places(query: str, limit: int = 5):

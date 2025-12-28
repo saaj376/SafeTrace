@@ -197,5 +197,10 @@ export const getSafetyHeatmap = async (): Promise<HeatmapGeoJSON> => {
   return response.data
 }
 
+export const resetHeatmap = async (): Promise<{ status: string; message: string; stats: { total: number; green: number; orange: number; red: number } }> => {
+  const response = await api.post('/api/reset-heatmap')
+  return response.data
+}
+
 export default api
 

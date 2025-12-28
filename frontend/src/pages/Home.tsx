@@ -12,6 +12,7 @@ import {
   getSegmentInfo,
   getAvailableTags,
   getSafetyHeatmap,
+  resetHeatmap,
   HeatmapGeoJSON,
   SegmentInfo,
   TagsResponse,
@@ -222,6 +223,29 @@ export default function Home() {
       setSelectedSegmentInfo(null)
     }
   }, [activeTab])
+
+  // Reset heatmap with random demo data
+  const handleResetHeatmap = async () => {
+    setLoading(true)
+    try {
+      const result = await resetHeatmap()
+      console.log('[HEATMAP] Reset:', result)
+      
+      // Refresh heatmap display
+      const newHeatmap = await getSafetyHeatmap()
+      setHeatmapData(newHeatmap)
+      
+      setError(null)
+      setRatingSuccess(`Heatmap reset! ${result.stats.green} safe, ${result.stats.orange} moderate, ${result.stats.red} unsafe segments`)
+      setTimeout(() => setRatingSuccess(null), 4000)
+    } catch (err) {
+      console.error('Error resetting heatmap:', err)
+      setError('Failed to reset heatmap')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Submit rating
   const handleSubmitRating = async () => {
@@ -716,6 +740,15 @@ export default function Home() {
               )}
             >
               Heatmap
+            </button>
+            {/* Reset Heatmap Button */}
+            <button
+              onClick={handleResetHeatmap}
+              disabled={loading}
+              className="px-4 py-2 rounded-lg font-medium bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              title="Reset heatmap with random demo data"
+            >
+              {loading ? '⟳' : '🔄'} Reset Demo Data
             </button>
             {backendConnected !== null && (
               <div className="flex items-center space-x-2">
