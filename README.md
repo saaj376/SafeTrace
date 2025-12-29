@@ -1,4 +1,4 @@
-# SafeTrace - Intelligent Safety Routing System
+# Streetsafe - Intelligent Safety Routing System
 
 A comprehensive safety routing application with real-time hazard monitoring, emergency SOS features, and intelligent route planning.
 
